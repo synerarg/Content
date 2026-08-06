@@ -47,6 +47,57 @@ export interface ImageProvider {
 }
 
 /**
+ * A provider refused because of a rate limit, not because anything is wrong.
+ *
+ * This has to be distinguishable from every other failure, because the correct
+ * response is the opposite one: a bad prompt should stop and be reported, a
+ * rate limit should wait and try again. Before the queue existed both surfaced
+ * as HTTP 500 and a red toast — which is why clicking "Generar fondo" twice
+ * quickly used to just fail the second one.
+ *
+ * `retryAfterMs` is whatever the provider said to wait, when it says so.
+ */
+export class RateLimitError extends Error {
+  readonly retryAfterMs: number;
+
+  constructor(message: string, retryAfterMs: number) {
+    super(message);
+    this.name = "RateLimitError";
+    this.retryAfterMs = retryAfterMs;
+  }
+}
+
+/**
+ * Fallback wait when a 429 carries no retry hint.
+ *
+ * 31s rather than 30: the Gemini free tier's documented ceiling is per MINUTE
+ * at 2 images, so a wait of exactly half a minute lands right on the boundary
+ * and races it. One second past is the difference between a retry that works
+ * and one that 429s again.
+ */
+export const DEFAULT_RETRY_AFTER_MS = 31_000;
+
+/**
+ * Pull a retry delay out of a provider error payload.
+ *
+ * Google returns it as `error.details[]` containing a RetryInfo entry with a
+ * protobuf duration string (`"31s"`, `"1.5s"`). The shape is searched for
+ * loosely rather than parsed strictly — this is a hint used to pace a retry, so
+ * a miss costs one extra wait, while being too strict about an undocumented
+ * shape costs the hint entirely.
+ */
+export function parseRetryAfterMs(raw: string): number | null {
+  const match = raw.match(/"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"/);
+  if (match) {
+    const seconds = Number(match[1]);
+    if (Number.isFinite(seconds) && seconds > 0) {
+      return Math.ceil(seconds * 1000);
+    }
+  }
+  return null;
+}
+
+/**
  * Generation targets per output format.
  *
  * Dimensions are divisible by 16 (diffusion models prefer it) and hit the

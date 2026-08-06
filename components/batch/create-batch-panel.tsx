@@ -1,9 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2, Minus, Plus, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import {
+  CAROUSEL_SLIDE_RANGE,
+  RECIPE_PRESETS,
+  RECIPE_LIMITS,
+  KIND_LABEL,
+  describeRecipe,
+  recipeSchema,
+  totalPosts,
+  totalSlides,
+  type BatchRecipe,
+  type PostKind,
+} from "@/lib/batch/recipe";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,16 +30,103 @@ import {
 
 export type BrandOption = { id: string; name: string };
 
+const CUSTOM = "custom";
+
+/** Publishing order, which is not the enum's declaration order. */
+const KIND_ORDER: PostKind[] = ["carousel", "feed", "story"];
+
+const KIND_HINT: Record<PostKind, string> = {
+  carousel: "Desarrolla una idea por placa, en orden.",
+  feed: "Una placa sola, formato feed.",
+  story: "Una placa sola, vertical. Se ve dos segundos.",
+};
+
+type CustomState = Record<PostKind, { count: number; slides: number }>;
+
+function Stepper({
+  value,
+  min,
+  max,
+  onChange,
+  label,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  onChange: (next: number) => void;
+  label: string;
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        className="size-7"
+        disabled={value <= min}
+        aria-label={`Menos ${label}`}
+        onClick={() => onChange(Math.max(min, value - 1))}
+      >
+        <Minus className="size-3.5" />
+      </Button>
+      <span className="w-7 text-center text-sm tabular-nums" aria-live="polite">
+        {value}
+      </span>
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        className="size-7"
+        disabled={value >= max}
+        aria-label={`Más ${label}`}
+        onClick={() => onChange(Math.min(max, value + 1))}
+      >
+        <Plus className="size-3.5" />
+      </Button>
+    </div>
+  );
+}
+
 export function CreateBatchPanel({ brands }: { brands: BrandOption[] }) {
   const router = useRouter();
   const [brandId, setBrandId] = useState(brands[0]?.id ?? "");
   const [brief, setBrief] = useState("");
-  const [postCount, setPostCount] = useState("3");
+  const [presetId, setPresetId] = useState(RECIPE_PRESETS[0]?.id ?? CUSTOM);
+  const [custom, setCustom] = useState<CustomState>({
+    carousel: { count: 1, slides: 4 },
+    feed: { count: 1, slides: 1 },
+    story: { count: 1, slides: 1 },
+  });
   const [pending, setPending] = useState(false);
+
+  const recipe: BatchRecipe = useMemo(() => {
+    if (presetId !== CUSTOM) {
+      return RECIPE_PRESETS.find((p) => p.id === presetId)?.recipe ?? [];
+    }
+    return KIND_ORDER.map((type) => ({
+      type,
+      count: custom[type].count,
+      slides: custom[type].slides,
+    })).filter((item) => item.count > 0);
+  }, [presetId, custom]);
+
+  // Validated against the same schema the route uses, so an invalid
+  // composition is caught here with the same message rather than round-tripping.
+  const validation = recipeSchema.safeParse(recipe);
+  const recipeError = validation.success
+    ? null
+    : (validation.error.issues[0]?.message ?? "Composición inválida.");
+
+  const posts = totalPosts(recipe);
+  const slides = totalSlides(recipe);
 
   async function handleGenerate() {
     if (brief.trim().length < 8) {
       toast.error("Contame un poco más sobre el lote.");
+      return;
+    }
+    if (recipeError) {
+      toast.error(recipeError);
       return;
     }
 
@@ -35,11 +135,7 @@ export function CreateBatchPanel({ brands }: { brands: BrandOption[] }) {
       const res = await fetch("/api/generate/batch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          brandId,
-          brief,
-          postCount: Number(postCount),
-        }),
+        body: JSON.stringify({ brandId, brief, recipe }),
       });
 
       const payload = await res.json();
@@ -61,44 +157,118 @@ export function CreateBatchPanel({ brands }: { brands: BrandOption[] }) {
   }
 
   return (
-    <div className="space-y-4 rounded-xl border border-border bg-card p-5">
+    <div className="space-y-5 rounded-xl border border-border bg-card p-5">
       <div className="flex items-center gap-2">
         <Sparkles className="size-4 text-[var(--synera-accent)]" />
         <h2 className="text-sm font-semibold">Nuevo lote</h2>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
-        <div className="space-y-2">
-          <Label>Marca</Label>
-          <Select value={brandId} onValueChange={setBrandId}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {brands.map((brand) => (
-                <SelectItem key={brand.id} value={brand.id}>
-                  {brand.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      <div className="space-y-2">
+        <Label>Marca</Label>
+        <Select value={brandId} onValueChange={setBrandId}>
+          <SelectTrigger className="sm:w-72">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {brands.map((brand) => (
+              <SelectItem key={brand.id} value={brand.id}>
+                {brand.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Composición</Label>
+        <div className="flex flex-wrap gap-2">
+          {[...RECIPE_PRESETS, { id: CUSTOM, label: "Personalizado", description: "", recipe: [] }].map(
+            (preset) => {
+              const active = presetId === preset.id;
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => setPresetId(preset.id)}
+                  aria-pressed={active}
+                  className={cn(
+                    "rounded-full border px-3 py-1.5 text-sm transition-colors",
+                    active
+                      ? "border-[color-mix(in_oklch,var(--synera-accent)_40%,transparent)] bg-accent/50 text-foreground"
+                      : "border-border text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {preset.label}
+                </button>
+              );
+            },
+          )}
         </div>
 
-        <div className="space-y-2">
-          <Label>Piezas</Label>
-          <Select value={postCount} onValueChange={setPostCount}>
-            <SelectTrigger className="w-28">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {[1, 2, 3, 4, 5, 6].map((n) => (
-                <SelectItem key={n} value={String(n)}>
-                  {n}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {presetId === CUSTOM ? (
+          <div className="divide-y divide-border rounded-lg border border-border">
+            {KIND_ORDER.map((type) => (
+              <div
+                key={type}
+                className="flex flex-wrap items-center justify-between gap-3 p-3"
+              >
+                <div className="min-w-40">
+                  <p className="text-sm font-medium">{KIND_LABEL[type]}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {KIND_HINT[type]}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  {type === "carousel" && custom.carousel.count > 0 ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">
+                        Placas
+                      </span>
+                      <Stepper
+                        label="placas del carrusel"
+                        value={custom.carousel.slides}
+                        min={CAROUSEL_SLIDE_RANGE.min}
+                        max={CAROUSEL_SLIDE_RANGE.max}
+                        onChange={(slides) =>
+                          setCustom((c) => ({
+                            ...c,
+                            carousel: { ...c.carousel, slides },
+                          }))
+                        }
+                      />
+                    </div>
+                  ) : null}
+
+                  <Stepper
+                    label={KIND_LABEL[type]}
+                    value={custom[type].count}
+                    min={0}
+                    max={RECIPE_LIMITS.maxPosts}
+                    onChange={(count) =>
+                      setCustom((c) => ({ ...c, [type]: { ...c[type], count } }))
+                    }
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            {RECIPE_PRESETS.find((p) => p.id === presetId)?.description}
+          </p>
+        )}
+
+        {recipeError ? (
+          <p className="text-sm text-destructive">{recipeError}</p>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            <span className="text-foreground">{describeRecipe(recipe)}</span> —{" "}
+            {posts} pieza{posts === 1 ? "" : "s"}, {slides} placa
+            {slides === 1 ? "" : "s"}. Los fondos se generan después, desde el
+            lote.
+          </p>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -111,18 +281,21 @@ export function CreateBatchPanel({ brands }: { brands: BrandOption[] }) {
           placeholder="una semana de contenido sobre por qué una pyme necesita ordenar sus clientes"
         />
         <p className="text-xs text-muted-foreground">
-          Claude arma las piezas con ángulos distintos del mismo tema, elige
-          plantilla y formato, y escribe caption y hashtags para cada una.
+          Claude escribe cada pieza con un ángulo distinto del mismo tema, elige
+          plantilla y escribe caption y hashtags.
         </p>
       </div>
 
-      <Button onClick={handleGenerate} disabled={pending || !brandId}>
+      <Button
+        onClick={handleGenerate}
+        disabled={pending || !brandId || Boolean(recipeError)}
+      >
         {pending ? (
           <Loader2 className="size-4 animate-spin" />
         ) : (
           <Sparkles className="size-4" />
         )}
-        {pending ? "Generando lote…" : "Generar lote"}
+        {pending ? "Escribiendo el lote…" : "Generar lote"}
       </Button>
     </div>
   );

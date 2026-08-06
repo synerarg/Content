@@ -1,11 +1,21 @@
 import type { AnyTemplateDefinition } from "@/templates/registry";
 import { FORMATS } from "@/templates/types";
+import {
+  describeRecipe,
+  expandRecipe,
+  KIND_LABEL,
+  type BatchRecipe,
+} from "@/lib/batch/recipe";
 
 /**
  * Batch prompt. Versioned, and recorded on every `generations` row so a change
  * in output quality can be traced to the wording that caused it.
+ *
+ * 2026-08-06.1 — the user prompt asks for an explicit composition (a recipe)
+ * instead of a piece count, and enumerates the pieces one per line so the model
+ * has a list to fill rather than a structure to invent.
  */
-export const BATCH_PROMPT_VERSION = "2026-08-05.1";
+export const BATCH_PROMPT_VERSION = "2026-08-06.1";
 
 function slotLimit(template: AnyTemplateDefinition, key: string): number | null {
   const field = template.slots.shape[key];
@@ -61,7 +71,7 @@ TIPOS DE PIEZA
 - feed: una placa sola, formato feed.
 - story: una placa sola, formato historia. Se ve dos segundos: menos texto, más directo.
 - carousel: varias placas. La primera SIEMPRE usa una plantilla de rol "cover"; las siguientes, rol "body".
-  Un carrusel tiene entre 3 y 5 placas y desarrolla una idea por placa, en orden.
+  Desarrolla una idea por placa, en orden. La cantidad de placas te la indica el pedido, no la elegís vos.
 
 CATÁLOGO DE PLANTILLAS
 ${templates.map(describeTemplate).join("\n\n")}
@@ -92,14 +102,14 @@ export function buildBatchUserPrompt({
   targetAudience,
   exampleCaptions,
   brief,
-  postCount,
+  recipe,
 }: {
   brandName: string;
   toneOfVoice: string;
   targetAudience: string;
   exampleCaptions: string[];
   brief: string;
-  postCount: number;
+  recipe: BatchRecipe;
 }): string {
   const sections: string[] = [`MARCA: ${brandName}`];
 
@@ -116,8 +126,34 @@ export function buildBatchUserPrompt({
   }
 
   sections.push(`BRIEF DEL LOTE\n${brief.trim()}`);
+
+  /*
+    The composition is spelled out piece by piece, in order, rather than
+    described in prose. "1 carrusel de 4 placas · 1 feed · 3 historias" is
+    unambiguous to a person and still leaves a model room to miscount; a
+    numbered list of exactly the pieces to produce does not. The array it
+    returns is expected to match this list position for position, which is also
+    what makes the result verifiable afterwards.
+  */
+  const pieces = expandRecipe(recipe);
+  const lines = pieces.map((piece, index) => {
+    const slides =
+      piece.type === "carousel"
+        ? `${piece.slides} placas (la 1 rol cover, el resto rol body)`
+        : "1 placa";
+    return `${index + 1}. ${KIND_LABEL[piece.type]} — ${slides}`;
+  });
+
   sections.push(
-    `Generá exactamente ${postCount} piezas. Incluí al menos un carrusel si el tema da para desarrollar en pasos.`,
+    [
+      `COMPOSICIÓN EXACTA DEL LOTE: ${describeRecipe(recipe)}`,
+      "",
+      `Devolvé exactamente ${pieces.length} piezas, en este orden y con esta cantidad de placas cada una:`,
+      ...lines,
+      "",
+      "No agregues piezas, no saques, no cambies el tipo de ninguna y no cambies la cantidad de placas.",
+      "Cada pieza tiene que aportar un ángulo distinto del mismo tema.",
+    ].join("\n"),
   );
 
   return sections.join("\n\n");

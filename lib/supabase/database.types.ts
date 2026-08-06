@@ -325,7 +325,11 @@ export type Database = {
       }
       slides: {
         Row: {
+          background_attempts: number
+          background_error: string | null
           background_path: string | null
+          background_started_at: string | null
+          background_status: Database["public"]["Enums"]["background_status"]
           created_at: string
           format: string
           generation_params: Json
@@ -338,7 +342,11 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          background_attempts?: number
+          background_error?: string | null
           background_path?: string | null
+          background_started_at?: string | null
+          background_status?: Database["public"]["Enums"]["background_status"]
           created_at?: string
           format?: string
           generation_params?: Json
@@ -351,7 +359,11 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          background_attempts?: number
+          background_error?: string | null
           background_path?: string | null
+          background_started_at?: string | null
+          background_status?: Database["public"]["Enums"]["background_status"]
           created_at?: string
           format?: string
           generation_params?: Json
@@ -473,6 +485,7 @@ export type Database = {
       current_workspace_ids_text: { Args: never; Returns: string[] }
     }
     Enums: {
+      background_status: "pending" | "queued" | "running" | "ready" | "failed"
       batch_status: "draft" | "generating" | "ready" | "failed"
       font_source: "google" | "upload"
       generation_kind: "text" | "image"
@@ -608,6 +621,7 @@ export const Constants = {
   },
   public: {
     Enums: {
+      background_status: ["pending", "queued", "running", "ready", "failed"],
       batch_status: ["draft", "generating", "ready", "failed"],
       font_source: ["google", "upload"],
       generation_kind: ["text", "image"],

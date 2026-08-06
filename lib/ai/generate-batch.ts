@@ -9,12 +9,19 @@ import {
   templatesByRole,
   type AnyTemplateDefinition,
 } from "@/templates/registry";
-import { FORMAT_KEYS, type FormatKey } from "@/templates/types";
+import { type FormatKey } from "@/templates/types";
 import {
   BATCH_PROMPT_VERSION,
   buildBatchSystemPrompt,
   buildBatchUserPrompt,
 } from "@/prompts/batch-generation";
+import {
+  expandRecipe,
+  formatForKind,
+  KIND_LABEL,
+  type BatchRecipe,
+  type PostKind,
+} from "@/lib/batch/recipe";
 import { estimateCostUsd } from "./pricing";
 
 export const BATCH_MODEL = "claude-sonnet-5";
@@ -56,8 +63,12 @@ export const batchSchema = z.object({
   posts: z
     .array(
       z.object({
+        // Still asked for, even though the recipe already fixes it. It is what
+        // lets a returned piece be MATCHED to a requested one — without it,
+        // reconciliation could only go by position, and a model that returns
+        // the right pieces in the wrong order would have its copy relabelled
+        // instead of realigned.
         type: z.enum(["feed", "story", "carousel"]),
-        format: z.enum(FORMAT_KEYS as [FormatKey, ...FormatKey[]]),
         caption: z.string(),
         hashtags: z.array(z.string()),
         cta: z.string(),
@@ -77,7 +88,7 @@ export type GeneratedSlide = {
 };
 
 export type GeneratedPost = {
-  type: "feed" | "story" | "carousel";
+  type: PostKind;
   format: FormatKey;
   caption: string;
   hashtags: string[];
@@ -190,13 +201,130 @@ function repairCarousel(
   });
 }
 
+/**
+ * Bring a carousel to exactly the slide count the recipe asked for.
+ *
+ * Extra slides are dropped. A shortfall is PADDED with an empty body slide
+ * rather than accepted, because the count is an explicit request: getting the
+ * requested shape with one blank to fill is closer to what was asked than
+ * quietly returning a shorter carousel. Either way it warns — the point of the
+ * recipe is that a mismatch stops being invisible.
+ */
+function fitCarouselLength(
+  slides: GeneratedSlide[],
+  wanted: number,
+  pieceLabel: string,
+  warnings: string[],
+): GeneratedSlide[] {
+  if (slides.length === wanted) return slides;
+
+  if (slides.length > wanted) {
+    warnings.push(
+      `${pieceLabel} volvió con ${slides.length} placas en vez de ${wanted}; se descartaron las últimas ${slides.length - wanted}.`,
+    );
+    return slides.slice(0, wanted);
+  }
+
+  const body = templatesByRole("body")[0];
+  if (!body) return slides;
+
+  const padded = [...slides];
+  while (padded.length < wanted) {
+    const slots: Record<string, string> = {};
+    for (const key of Object.keys(body.slots.shape)) slots[key] = "";
+    slots.step = String(padded.length).padStart(2, "0");
+    padded.push({ templateSlug: body.slug, slots });
+  }
+
+  warnings.push(
+    `${pieceLabel} volvió con ${slides.length} placas en vez de ${wanted}; se agregaron ${wanted - slides.length} vacías para completar. Revisá el texto.`,
+  );
+  return padded;
+}
+
+export type RawPost = {
+  type: PostKind;
+  caption: string;
+  hashtags: string[];
+  cta: string;
+  backgroundBrief: string;
+  slides: GeneratedSlide[];
+};
+
+/**
+ * Align what the model returned with what the recipe asked for.
+ *
+ * Matching is BY TYPE, greedily, not by position. A model that returns the
+ * right pieces in the wrong order is common and harmless; positional matching
+ * would react to it by relabelling a feed post as a carousel and mangling
+ * perfectly good copy. Matching by type reorders instead.
+ *
+ * Unmatched requests are reported, not fabricated — copy cannot be invented
+ * here, and a warning the user can act on beats an empty piece they might ship.
+ */
+export function reconcileWithRecipe(
+  raw: RawPost[],
+  recipe: BatchRecipe,
+  warnings: string[],
+): GeneratedPost[] {
+  const wanted = expandRecipe(recipe);
+  const pool = [...raw];
+  const result: GeneratedPost[] = [];
+
+  for (const [index, piece] of wanted.entries()) {
+    const matchIndex = pool.findIndex((post) => post.type === piece.type);
+    if (matchIndex === -1) continue;
+
+    const [post] = pool.splice(matchIndex, 1);
+    const label = `La pieza ${index + 1} (${KIND_LABEL[piece.type].toLowerCase()})`;
+
+    let slides = post.slides;
+    if (piece.type === "carousel") {
+      slides = repairCarousel(slides, warnings);
+      slides = fitCarouselLength(slides, piece.slides, label, warnings);
+    } else if (slides.length !== 1) {
+      if (slides.length === 0) continue;
+      warnings.push(
+        `${label} volvió con ${slides.length} placas; se usó solo la primera.`,
+      );
+      slides = slides.slice(0, 1);
+    }
+
+    result.push({
+      type: piece.type,
+      format: formatForKind(piece.type),
+      caption: post.caption,
+      hashtags: post.hashtags,
+      cta: post.cta,
+      backgroundBrief: post.backgroundBrief,
+      slides,
+    });
+  }
+
+  const missing = wanted.length - result.length;
+  if (missing > 0) {
+    warnings.push(
+      `Se pidieron ${wanted.length} piezas y el modelo devolvió ${result.length}. Faltan ${missing}; generá otro lote o completalas a mano.`,
+    );
+  }
+  if (pool.length > 0) {
+    warnings.push(
+      `El modelo devolvió ${pool.length} pieza(s) que no estaban en la composición pedida (${pool
+        .map((post) => KIND_LABEL[post.type].toLowerCase())
+        .join(", ")}); se descartaron.`,
+    );
+  }
+
+  return result;
+}
+
 export async function generateBatch(input: {
   brandName: string;
   toneOfVoice: string;
   targetAudience: string;
   exampleCaptions: string[];
   brief: string;
-  postCount: number;
+  recipe: BatchRecipe;
 }): Promise<GenerateBatchResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -229,7 +357,7 @@ export async function generateBatch(input: {
   }
   if (response.stop_reason === "max_tokens") {
     throw new Error(
-      "La respuesta se cortó por límite de tokens. Probá con menos piezas.",
+      "La respuesta se cortó por límite de tokens. Probá con una composición más chica.",
     );
   }
 
@@ -240,46 +368,34 @@ export async function generateBatch(input: {
 
   const warnings: string[] = [];
 
-  const posts: GeneratedPost[] = parsed.posts.map((post) => {
-    let slides: GeneratedSlide[] = post.slides.map((slide) => {
+  // Normalise first, reconcile against the recipe second. Trimming and tag
+  // cleanup are per-piece concerns; matching pieces to requests is a
+  // whole-batch one, and doing it in that order keeps each step simple.
+  const raw: RawPost[] = parsed.posts.map((post) => ({
+    type: post.type,
+    caption: post.caption.trim(),
+    hashtags: post.hashtags
+      .map((tag) => tag.replace(/^#/, "").trim().toLowerCase())
+      .filter(Boolean),
+    cta: post.cta.trim(),
+    backgroundBrief: post.background_brief.trim(),
+    slides: post.slides.map((slide) => {
       const template = getTemplate(slide.template_slug);
       const slots = slide.slots as Record<string, string>;
       return {
         templateSlug: slide.template_slug,
         slots: template ? trimToLimits(template, slots, warnings) : slots,
       };
-    });
+    }),
+  }));
 
-    if (post.type === "carousel") {
-      slides = repairCarousel(slides, warnings);
-      if (slides.length < 2) {
-        warnings.push(
-          "Un carrusel volvió con menos de dos placas; se trata como pieza simple.",
-        );
-      }
-    } else if (slides.length > 1) {
-      warnings.push(
-        `Una pieza de tipo ${post.type} volvió con ${slides.length} placas; se usó solo la primera.`,
-      );
-      slides = slides.slice(0, 1);
-    }
+  const posts = reconcileWithRecipe(raw, input.recipe, warnings);
 
-    // A story-only template must not end up on a feed post, and vice versa.
-    const format: FormatKey =
-      post.type === "story" ? "story" : post.format === "story" ? "story" : "feed";
-
-    return {
-      type: post.type,
-      format,
-      caption: post.caption.trim(),
-      hashtags: post.hashtags
-        .map((tag) => tag.replace(/^#/, "").trim().toLowerCase())
-        .filter(Boolean),
-      cta: post.cta.trim(),
-      backgroundBrief: post.background_brief.trim(),
-      slides,
-    };
-  });
+  if (posts.length === 0) {
+    throw new Error(
+      "El modelo no devolvió ninguna pieza que coincida con la composición pedida.",
+    );
+  }
 
   const usage = {
     inputTokens: response.usage.input_tokens ?? 0,

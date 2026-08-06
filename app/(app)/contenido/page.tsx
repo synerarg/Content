@@ -27,7 +27,7 @@ export default async function ContenidoPage() {
     supabase
       .from("content_batches")
       .select(
-        "id, title, brief, status, created_at, brands(name), posts(id, type)",
+        "id, title, brief, status, created_at, brands(name), posts(id, type, slides(background_status))",
       )
       .order("created_at", { ascending: false }),
   ]);
@@ -86,6 +86,19 @@ export default async function ContenidoPage() {
                   {},
                 );
 
+                // Background progress, at a glance. A batch whose copy is
+                // written but whose backgrounds are half done looks identical
+                // to a finished one without this.
+                const slides = (batch.posts ?? []).flatMap(
+                  (post) => post.slides ?? [],
+                );
+                const readySlides = slides.filter(
+                  (slide) => slide.background_status === "ready",
+                ).length;
+                const failedSlides = slides.filter(
+                  (slide) => slide.background_status === "failed",
+                ).length;
+
                 return (
                   <Link
                     key={batch.id}
@@ -98,7 +111,7 @@ export default async function ContenidoPage() {
                         {batch.brands?.name} · {batch.brief}
                       </p>
                     </div>
-                    <div className="flex shrink-0 items-center gap-2">
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
                       {Object.entries(counts).map(([type, count]) => (
                         <span
                           key={type}
@@ -107,6 +120,21 @@ export default async function ContenidoPage() {
                           {count} {TYPE_LABEL[type] ?? type}
                         </span>
                       ))}
+
+                      {slides.length > 0 ? (
+                        <span
+                          className={`rounded-full border px-2.5 py-1 text-xs tabular-nums ${
+                            failedSlides > 0
+                              ? "border-destructive/30 text-destructive"
+                              : readySlides === slides.length
+                                ? "border-[color-mix(in_oklch,var(--synera-accent)_28%,transparent)] text-[var(--synera-accent)]"
+                                : "border-border text-muted-foreground"
+                          }`}
+                        >
+                          {readySlides}/{slides.length} fondos
+                          {failedSlides > 0 ? ` · ${failedSlides} error` : ""}
+                        </span>
+                      ) : null}
                     </div>
                   </Link>
                 );

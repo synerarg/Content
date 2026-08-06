@@ -29,10 +29,16 @@ import {
 import { buildCaptionMarkdown, buildZip, slugify, type ZipEntry } from "@/lib/export/zip";
 import {
   deleteBatch,
-  setSlideBackground,
   updatePost,
   updateSlideSlots,
 } from "@/app/(app)/contenido/actions";
+import {
+  useBackgroundQueue,
+  type BackgroundStatus,
+  type QueueItem,
+  type SlideQueueState,
+} from "@/lib/batch/use-background-queue";
+import { QueueProgress, SlideStatusChip } from "@/components/batch/queue-progress";
 import { getTemplate, emptySlots } from "@/templates/registry";
 import { FORMATS, type FormatKey } from "@/templates/types";
 import { Button } from "@/components/ui/button";
@@ -48,6 +54,9 @@ export type BatchSlide = {
   backgroundPath: string | null;
   backgroundSignedUrl: string | null;
   backgroundBrief: string;
+  backgroundStatus: BackgroundStatus;
+  backgroundError: string | null;
+  backgroundAttempts: number;
 };
 
 export type BatchPost = {
@@ -83,7 +92,6 @@ export function BatchDetail({
 
   const [posts, setPosts] = useState(initialPosts);
   const [backgrounds, setBackgrounds] = useState<Record<string, string>>({});
-  const [generatingSlide, setGeneratingSlide] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState("");
 
@@ -112,40 +120,125 @@ export function BatchDetail({
   }
 
   const slideRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const objectUrls = useRef<string[]>([]);
+  /** Keyed by slide id so a re-render can tell what is already converted. */
+  const objectUrls = useRef<Map<string, string>>(new Map());
 
-  // Signed Storage URLs are cross-origin; drawing them would taint the canvas
-  // and make the PNG export throw. Convert every one to a same-origin blob
-  // before it reaches a template.
+  const allSlides = posts.flatMap((post) => post.slides);
+
+  const queue = useBackgroundQueue({
+    batchId,
+    initialStates: Object.fromEntries(
+      initialPosts.flatMap((post) =>
+        post.slides.map((slide) => [
+          slide.id,
+          {
+            status: slide.backgroundStatus,
+            error: slide.backgroundError,
+            attempts: slide.backgroundAttempts,
+          } satisfies SlideQueueState,
+        ]),
+      ),
+    ),
+    onSlideReady: async (slideId, background) => {
+      try {
+        const blobUrl = await toObjectUrl(background.signedUrl);
+        const previous = objectUrls.current.get(slideId);
+        if (previous) URL.revokeObjectURL(previous);
+        objectUrls.current.set(slideId, blobUrl);
+        setBackgrounds((current) => ({ ...current, [slideId]: blobUrl }));
+      } catch {
+        // The background is saved either way; only the live preview misses it.
+      }
+    },
+  });
+
+  function queueItemFor(slide: BatchSlide): QueueItem {
+    return {
+      slideId: slide.id,
+      brandId: brand.id,
+      backgroundBrief: slide.backgroundBrief,
+      format: slide.format,
+      templateSlug: slide.templateSlug,
+    };
+  }
+
+  async function runQueue(slides: BatchSlide[]) {
+    const runnable = slides.filter((slide) => slide.backgroundBrief.trim());
+    const skipped = slides.length - runnable.length;
+
+    if (runnable.length === 0) {
+      toast.error("Ninguna de estas placas tiene descripción de escena.");
+      return;
+    }
+    if (skipped > 0) {
+      toast.warning(
+        `${skipped} placa(s) sin descripción de escena quedaron afuera.`,
+      );
+    }
+
+    const result = await queue.start(runnable.map(queueItemFor));
+    if (!result) return;
+
+    if (result.cancelled) {
+      toast.info("Generación pausada. Lo hecho quedó guardado.");
+    } else if (result.failed > 0) {
+      toast.error(`${result.failed} fondo(s) fallaron. Podés reintentarlos.`);
+    } else {
+      toast.success("Todos los fondos están listos.");
+    }
+    router.refresh();
+  }
+
+  /*
+    Signed Storage URLs are cross-origin; drawing them would taint the canvas
+    and make the PNG export throw. Every one is converted to a same-origin blob
+    before it reaches a template.
+
+    Only slides not already converted are fetched, and blob URLs are revoked
+    ONLY on unmount — never on re-run. The previous version revoked the whole
+    set in its cleanup, which was survivable when this effect re-ran rarely but
+    is not now: the queue writes a row per completed slide, and any refresh
+    would blank every background already on screen while they were re-fetched
+    one at a time.
+  */
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
-      const entries = initialPosts
-        .flatMap((post) => post.slides)
-        .filter((slide) => slide.backgroundSignedUrl);
+      for (const post of initialPosts) {
+        for (const slide of post.slides) {
+          if (!slide.backgroundSignedUrl) continue;
+          if (objectUrls.current.has(slide.id)) continue;
 
-      for (const slide of entries) {
-        try {
-          const url = await toObjectUrl(slide.backgroundSignedUrl!);
-          if (cancelled) {
-            URL.revokeObjectURL(url);
-            return;
+          try {
+            const url = await toObjectUrl(slide.backgroundSignedUrl);
+            if (cancelled) {
+              URL.revokeObjectURL(url);
+              return;
+            }
+            objectUrls.current.set(slide.id, url);
+            setBackgrounds((current) => ({ ...current, [slide.id]: url }));
+          } catch {
+            // A missing background degrades the slide; it must not block the page.
           }
-          objectUrls.current.push(url);
-          setBackgrounds((current) => ({ ...current, [slide.id]: url }));
-        } catch {
-          // A missing background degrades the slide; it must not block the page.
         }
       }
     })();
 
     return () => {
       cancelled = true;
-      for (const url of objectUrls.current) URL.revokeObjectURL(url);
-      objectUrls.current = [];
     };
   }, [initialPosts]);
+
+  // Unmount-only cleanup, kept separate so it does not run when initialPosts
+  // changes identity.
+  useEffect(() => {
+    const urls = objectUrls.current;
+    return () => {
+      for (const url of urls.values()) URL.revokeObjectURL(url);
+      urls.clear();
+    };
+  }, []);
 
   function patchSlide(slideId: string, slots: Record<string, string>) {
     setPosts((current) =>
@@ -172,44 +265,16 @@ export function BatchDetail({
     if (!result.ok) toast.error(result.error);
   }
 
-  async function generateBackground(slide: BatchSlide) {
-    if (!slide.backgroundBrief.trim()) {
-      toast.error("Esta placa no tiene descripción de escena.");
-      return;
-    }
+  /*
+    A single slide goes through the same queue as a whole batch.
 
-    setGeneratingSlide(slide.id);
-    try {
-      const res = await fetch("/api/generate/image", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          brandId: brand.id,
-          brief: slide.backgroundBrief,
-          format: slide.format,
-          templateSlug: slide.templateSlug,
-        }),
-      });
-
-      const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Falló la generación.");
-
-      const blobUrl = await toObjectUrl(payload.signedUrl);
-      objectUrls.current.push(blobUrl);
-      setBackgrounds((current) => ({ ...current, [slide.id]: blobUrl }));
-
-      const saved = await setSlideBackground(slide.id, payload.path, {
-        backgroundBrief: slide.backgroundBrief,
-        seed: payload.seed,
-        prompt: payload.prompt,
-      });
-      if (!saved.ok) toast.error(saved.error);
-      else toast.success("Fondo generado.");
-    } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : "Falló la generación.");
-    } finally {
-      setGeneratingSlide(null);
-    }
+    One code path rather than two: the old standalone handler had no rate-limit
+    backoff, so clicking it twice in quick succession simply failed the second
+    one, and it recorded nothing about the failure. Running one item through the
+    queue gets the retries, the persisted state and the status chip for free.
+  */
+  function regenerateOne(slide: BatchSlide) {
+    void runQueue([slide]);
   }
 
   async function copyCaption(post: BatchPost) {
@@ -333,7 +398,10 @@ export function BatchDetail({
             <Trash2 className="size-4" />
             Eliminar
           </Button>
-          <Button onClick={handleExportZip} disabled={exporting || !ready}>
+          <Button
+            onClick={handleExportZip}
+            disabled={exporting || !ready || queue.running}
+          >
             {exporting ? (
               <Loader2 className="size-4 animate-spin" />
             ) : (
@@ -343,6 +411,35 @@ export function BatchDetail({
           </Button>
         </div>
       </div>
+
+      <QueueProgress
+        states={allSlides.map(
+          (slide) =>
+            queue.states[slide.id] ?? {
+              status: slide.backgroundStatus,
+              error: slide.backgroundError,
+              attempts: slide.backgroundAttempts,
+            },
+        )}
+        running={queue.running}
+        waitingUntil={queue.waitingUntil}
+        etaMs={queue.etaMs}
+        onStart={() =>
+          runQueue(
+            allSlides.filter(
+              (slide) => (queue.states[slide.id]?.status ?? "pending") !== "ready",
+            ),
+          )
+        }
+        onPause={queue.pause}
+        onRetryFailed={() =>
+          runQueue(
+            allSlides.filter(
+              (slide) => queue.states[slide.id]?.status === "failed",
+            ),
+          )
+        }
+      />
 
       {exporting ? (
         <p className="text-xs text-muted-foreground">
@@ -369,6 +466,14 @@ export function BatchDetail({
                 const template = getTemplate(slide.templateSlug);
                 if (!template || !brandTokens) return null;
 
+                const state = queue.states[slide.id] ?? {
+                  status: slide.backgroundStatus,
+                  error: slide.backgroundError,
+                  attempts: slide.backgroundAttempts,
+                };
+                const busy =
+                  state.status === "running" || state.status === "queued";
+
                 return (
                   <div key={slide.id} className="space-y-2">
                     <div className="rounded-xl border border-border p-2">
@@ -382,20 +487,31 @@ export function BatchDetail({
                         fontCss={fontCss}
                       />
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                      onClick={() => generateBackground(slide)}
-                      disabled={generatingSlide === slide.id}
-                    >
-                      {generatingSlide === slide.id ? (
-                        <Loader2 className="size-4 animate-spin" />
-                      ) : (
+
+                    <div className="flex items-center justify-between gap-2">
+                      <SlideStatusChip state={state} />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => regenerateOne(slide)}
+                        disabled={queue.running || busy}
+                      >
                         <ImageIcon className="size-4" />
-                      )}
-                      {backgrounds[slide.id] ? "Regenerar fondo" : "Generar fondo"}
-                    </Button>
+                        {state.status === "ready" ? "Regenerar" : "Generar"}
+                      </Button>
+                    </div>
+
+                    {/*
+                      The failure reason stays on screen until the slide is
+                      retried. "Exhausted balance" and a filtered prompt need
+                      completely different responses, and a toast that already
+                      disappeared cannot tell you which one happened.
+                    */}
+                    {state.status === "failed" && state.error ? (
+                      <p className="break-words rounded-md border border-destructive/20 px-2 py-1.5 text-[11px] text-destructive">
+                        {state.error}
+                      </p>
+                    ) : null}
                   </div>
                 );
               })}

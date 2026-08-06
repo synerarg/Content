@@ -2,7 +2,9 @@ import "server-only";
 
 import { fal } from "@fal-ai/client";
 import {
+  DEFAULT_RETRY_AFTER_MS,
   megapixelsOf,
+  RateLimitError,
   sniffImageType,
   type GenerateImageParams,
   type GeneratedImage,
@@ -78,6 +80,11 @@ export class FalFluxProvider implements ImageProvider {
         },
       });
     } catch (cause) {
+      // Same distinction Gemini gets: a 429 is a wait, so the queue can pace
+      // itself instead of marking the slide failed. fal sends no retry hint.
+      if ((cause as { status?: number })?.status === 429) {
+        throw new RateLimitError(describeFalError(cause), DEFAULT_RETRY_AFTER_MS);
+      }
       throw new Error(describeFalError(cause));
     }
 

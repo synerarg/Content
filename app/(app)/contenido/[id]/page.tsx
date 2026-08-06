@@ -45,7 +45,8 @@ export default async function BatchPage({
       `id, title, brief, status, created_at,
        brands (id, name, palette, typography, logo_path, brand_fonts (family, weight, style, storage_path)),
        posts (id, position, type, caption, hashtags, cta,
-              slides (id, position, template_slug, format, slots, background_path, generation_params))`,
+              slides (id, position, template_slug, format, slots, background_path, generation_params,
+                      background_status, background_error, background_attempts))`,
     )
     .eq("id", id)
     .maybeSingle();
@@ -130,6 +131,12 @@ export default async function BatchPage({
               ? ((slide.generation_params as Record<string, unknown>)
                   .backgroundBrief as string) || ""
               : "",
+          // The queue's state, read back from the row rather than rebuilt in
+          // the browser — which is what makes a reload resume instead of
+          // restart, and what lets a failure keep its reason.
+          backgroundStatus: slide.background_status,
+          backgroundError: slide.background_error,
+          backgroundAttempts: slide.background_attempts,
         })),
     }));
 

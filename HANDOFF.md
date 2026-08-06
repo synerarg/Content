@@ -99,6 +99,8 @@ public by design and safe; everything else is not.
                                      raises if not  (Phase 6)
 20260805000900_generation_usage_...  generation_usage_daily view, security_invoker
                                      ← the one line that matters, see §7  (Phase 6)
+20260805001000_background_queue.sql  background_status/error/attempts/started_at on
+                                     slides — the background queue's state  (Phase 7)
 ```
 
 ### RLS design (applies to every table)
@@ -129,8 +131,33 @@ templates/                6 templates + typed registry (registry is source of tr
 prompts/                  Versioned prompt files — never inline strings
 lib/render, lib/export    Brand tokens, font embedding, rasterizer, ZIP
 lib/format.ts             Locale/timezone-pinned display formatting  (Phase 6)
+lib/batch/recipe.ts       Batch composition: presets, schema, expansion  (Phase 7)
+lib/batch/use-background-queue.ts   The queue driver  (Phase 7)
 scripts/verify-rls.mjs    `npm run verify:rls`
+scripts/_stub-server-only.cjs       Lets probes import `server-only` modules
 ```
+
+### Batch recipes and the background queue (Phase 7)
+
+**A batch is requested as a COMPOSITION, not a count.** `postCount: 3` became a recipe —
+`1 carrusel de 4 placas · 1 feed · 3 historias` — with presets in `lib/batch/recipe.ts`.
+The prompt enumerates the pieces one per line, and `reconcileWithRecipe()` then checks
+what came back against what was asked for. It matches **by type, greedily, not by
+position**: a model that returns the right pieces in the wrong order gets reordered, where
+positional matching would relabel a feed post as a carousel and mangle its copy. Short
+carousels are padded, long ones truncated, extras dropped, shortfalls reported — all as
+warnings. Before this, asking for 5 and getting 4 was silent.
+
+**Backgrounds run as a queue driven by the browser, with its state in Postgres.** The
+provider rate limit is the binding constraint: the Gemini free tier does ~2 images/minute,
+so eight backgrounds is ~4 minutes of mostly waiting — which cannot be a Vercel function
+(300s ceiling, and billing function time to sleep). So the browser walks the list one
+request at a time while `slides.background_*` holds the state, which is what makes a
+reload resume instead of restart and lets a failure keep its reason.
+
+The queue **has no configured delay**. It runs flat out and slows only when the API
+answers 429, honouring the delay the provider asked for. Free tier throttles itself to
+~2/min; a paid tier never 429s and runs at full speed. Neither needs a setting.
 
 **`/configuracion`** reads `generation_usage_daily` (pre-aggregated in SQL, not in JS —
 `generations` grows forever) plus the last 20 raw rows. It reports integration status as
@@ -159,6 +186,9 @@ template automatically teaches the prompts its slot names and character limits.
 | Storage limits are live on both buckets | PASS — migration 0008 asserts them in-database |
 | `generation_usage_daily` denies anonymous reads | PASS — 200 `[]`, so RLS filters it rather than the grant being absent |
 | Phase 6 CSS reached the browser | PASS — `::selection`, `:focus-visible`, `prefers-reduced-motion` all present in the live stylesheet |
+| Recipe module, 17 assertions | PASS — presets, expansion order, and every invalid composition rejected |
+| `reconcileWithRecipe`, 20 assertions | PASS — incl. out-of-order input reordered rather than relabelled, padding, truncation, shortfall and extras |
+| Batch generation against the recipe, **live** | PASS — asked for 1 carousel of 4 + 1 feed + 3 stories, got exactly that; correct cover/body roles; formats derived from type; 0 warnings; no text/logo leakage into any scene; 53.8s, US$0.0575 |
 
 **NOT verified — the important gap:**
 
@@ -200,6 +230,21 @@ a column alias — it silently evaluated **false**, so every upload failed with
 0003 replaced it and added the missing `SELECT` policy (`upsert: true` needs it).
 **Use the `= any(...)` form for any new bucket.**
 
+**`revalidatePath` in a server action refreshes the page you are standing on.** The
+background queue calls `setSlideBackground` once per completed slide. With the default
+revalidate, each call handed `BatchDetail` a new `initialPosts` identity, which re-ran the
+effect that owns the blob URLs — and its cleanup revoked every background on screen. One
+flicker per slide, worsening as the batch got bigger. Two fixes: the queue passes
+`revalidate: false` and revalidates once at the end, and the effect now revokes only on
+unmount and skips slides it has already converted. **Any new per-item server action called
+in a loop needs the same treatment.**
+
+**`.next-build` was never in eslint's ignore list.** `NEXT_DIST_DIR` (added in Phase 6 to
+build without clobbering a running dev server) writes there, and `eslint.config.mjs`
+ignored only `.next/**` — so `npm run lint` reported ~1,000 errors from generated code the
+first time the directory was left on disk. Fixed. The lesson generalises: `.gitignore` and
+eslint's `ignores` are separate lists and both need the entry.
+
 **A Postgres view over an RLS table bypasses RLS by default.** Views execute as their
 OWNER, which here is `postgres` — a role RLS does not apply to. `generation_usage_daily`
 would have served every workspace's spend to any caller while `generations` itself stayed
@@ -232,6 +277,21 @@ arrives as `application/octet-stream`, which the `allowed_mime_types` added in 0
 rejects. `withDeclaredType()` in `lib/storage.ts` re-wraps the File with a type derived
 from its extension. Adding a bucket MIME allowlist without this makes uploads fail on some
 machines and not others.
+
+**A new External Google OAuth app only lets *listed test users* in.** It starts in
+*Testing*, where anyone not on the test-user list is refused with "Access blocked: … has
+not completed the Google verification process" — which reads like the app is broken rather
+than unconfigured. Either add every person who will sign in under Audience → Test users,
+or press **Publish app**, which is fine without verification while only `email`, `profile`
+and `openid` are requested. `DEPLOY.md` §4.1.
+
+**Signing in with Google can silently create a SECOND account — and an empty workspace.**
+Supabase links a Google identity onto an existing user only when the addresses match and
+both are verified. Otherwise it inserts a new `auth.users` row, and `handle_new_user()`
+dutifully gives it a fresh workspace. Nothing is lost, but it presents exactly as data
+loss: you sign in with Google and every brand is gone. The fix is the "link identities
+with the same email" setting plus confirming the original account's address — **not**
+recreating the brands. `DEPLOY.md` §4.5.
 
 **Vercel's proxy makes `new URL(request.url).origin` the wrong host.** The function sees
 an internal hostname, so an OAuth callback built from `origin` redirects users somewhere
@@ -333,21 +393,56 @@ npm run verify:rls     # anonymous-access leak check
    the `x-forwarded-host` fix in the OAuth callback, and `NEXT_DIST_DIR` in
    `next.config.ts`.
 
-**What is left — all of it needs the account owner**
+---
 
-1. **Google OAuth.** Code is written and working; it needs a Google Cloud OAuth client.
-   `DEPLOY.md` §4 has the exact steps. One correction to what this file used to say: the
-   redirect URI Google needs is **Supabase's** (`https://dzxkxwuzfmoyktevfdfn.supabase.co/auth/v1/callback`)
-   and it does **not** change between localhost, preview and production. What changes per
-   environment is Supabase's **Redirect URLs allow-list**, which needs a wildcard entry
-   for preview deployments.
-2. **Vercel project** — create it, set the env vars from `DEPLOY.md` §2, and set the
-   function region to **`gru1` (São Paulo)**. Supabase is in `sa-east-1`; Vercel defaults
-   to `iad1`, which puts an intercontinental round trip on every query.
-3. **Confirm the PNG export**, still (see §6). Unchanged and still the most important
-   open item: it is the foundation of Phases 2–5 and has never run end to end.
-4. **Look at the Phase 6 screens once** (see §6) — none of them has been seen by a human
-   or a screenshot.
+## 10. Phase 7 — automating content creation
+
+Built on request after the Vercel deploy, to cut the click count. A week of content
+(1 carousel of 4 + 1 feed + 3 stories = 5 pieces, 8 slides) used to be **1 click to write
+the copy, then 8 separate clicks to generate backgrounds one at a time, waiting ~15s at
+each**. It is now 1 click for the copy, 1 to start the queue, and 1 for the ZIP.
+
+- **Recipe** — presets (Semana completa / Un carrusel / Solo historias) plus a custom
+  builder. See §5.
+- **Queue** — one button generates every missing background, paced by the provider's own
+  429s, with pause, per-slide retry, and persisted state. See §5.
+- **Visibility** — a progress strip with a live estimate and a rate-limit countdown on the
+  batch page, a status chip and its error under each preview, and `n/m fondos` on every
+  row of the batch list.
+
+Auto-starting the queue on batch creation was considered and **deliberately rejected** by
+the account owner: reviewing the copy before spending four minutes of generation avoids
+regenerating backgrounds for text that is about to change.
+
+**Known limitation, worth not rediscovering:** carousel slides do not share a seed, so a
+carousel's four backgrounds are four unrelated photos. The `slides.generation_params`
+comment claims they do and the image route accepts a `seed` — but nothing sends one, and
+**Gemini ignores seeds entirely** (`gemini-provider.ts` passes it through to the result
+without ever putting it in the request). Cohesion currently comes only from the shared
+`background_brief`. With fal/FLUX the seed would work; with Gemini this needs to be solved
+in the prompt.
+
+---
+
+## 11. What is left
+
+**Done since Phase 6:** the app is **deployed on Vercel** and **Google OAuth is
+configured**. `DEPLOY.md` §4 was expanded in the process with the two things that actually
+bit — see the OAuth traps in §7.
+
+Still open:
+
+1. **Confirm the PNG export** (see §6). Unchanged, and still the most important open item:
+   it is the foundation of Phases 2–5 and has never run end to end.
+2. **Look at the Phase 6 and 7 screens once** (see §6) — `/configuracion`, the loading
+   skeletons, the mobile tab strip, the recipe builder and the queue progress strip have
+   all been verified by typecheck, lint, build and probes, but none has been seen by a
+   human or a screenshot.
+3. **Run one real batch queue end to end.** The recipe half is verified against the live
+   API; the queue's rate-limit path is not — it needs a run that actually trips a 429 to
+   confirm the backoff, the countdown and the resume-after-reload behave as intended.
+4. **Carousel background cohesion** (see §10) — needs a prompt-level solution, since
+   Gemini ignores seeds.
 
 **Vercel limits that shaped the design — keep them in mind**
 - **Request *and* response body cap 4.5 MB.** Hence: uploads go browser → signed URL →

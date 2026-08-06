@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireWorkspaceId } from "@/lib/workspace";
 import { getImageProvider } from "@/lib/image/factory";
-import { GENERATION_SIZE } from "@/lib/image/provider";
+import { GENERATION_SIZE, RateLimitError } from "@/lib/image/provider";
 import { composeImagePrompt, IMAGE_PROMPT_VERSION } from "@/prompts/image-prompt";
 import { artDirectionSchema } from "@/lib/schemas/brand";
 import { logGeneration } from "@/lib/ai/log-generation";
@@ -165,6 +165,7 @@ export async function POST(request: Request) {
   } catch (cause) {
     const message =
       cause instanceof Error ? cause.message : "Falló la generación de imagen.";
+    const rateLimited = cause instanceof RateLimitError;
 
     await logGeneration({
       workspaceId,
@@ -173,11 +174,32 @@ export async function POST(request: Request) {
       provider: provider.name,
       model: provider.model,
       input: { brief, format, templateSlug, prompt, promptVersion: IMAGE_PROMPT_VERSION },
-      output: {},
+      output: rateLimited ? { rateLimited: true } : {},
       durationMs: Date.now() - started,
       ok: false,
       error: message,
     });
+
+    /*
+      A rate limit answers 429, not 500, and says how long to wait.
+
+      This is what lets the queue pace itself against whatever tier is actually
+      configured rather than against a constant compiled into the browser: it
+      runs flat out and slows down only when told to, so the free tier's ~2
+      images/minute and a paid tier's much higher ceiling both work with no
+      configuration. Retry-After is set as well so anything that speaks plain
+      HTTP behaves sensibly too.
+    */
+    if (rateLimited) {
+      const retryAfterMs = (cause as RateLimitError).retryAfterMs;
+      return NextResponse.json(
+        { error: message, rateLimited: true, retryAfterMs },
+        {
+          status: 429,
+          headers: { "Retry-After": String(Math.ceil(retryAfterMs / 1000)) },
+        },
+      );
+    }
 
     return NextResponse.json({ error: message }, { status: 500 });
   }

@@ -4,6 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { requireWorkspaceId } from "@/lib/workspace";
 import { generateBatch, BATCH_MODEL } from "@/lib/ai/generate-batch";
 import { logGeneration } from "@/lib/ai/log-generation";
+import {
+  describeRecipe,
+  recipeSchema,
+  totalSlides,
+} from "@/lib/batch/recipe";
 
 /*
   A batch is several posts of copy in one call, with adaptive thinking on top,
@@ -18,7 +23,9 @@ export const maxDuration = 180;
 const requestSchema = z.object({
   brandId: z.uuid(),
   brief: z.string().trim().min(8, "Contame un poco más sobre el lote.").max(2000),
-  postCount: z.number().int().min(1).max(6),
+  // The recipe's own schema carries the ceilings and the per-type slide rules,
+  // so the route validates the exact same contract the browser built against.
+  recipe: recipeSchema,
 });
 
 export async function POST(request: Request) {
@@ -30,7 +37,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { brandId, brief, postCount } = parsed.data;
+  const { brandId, brief, recipe } = parsed.data;
 
   let workspaceId: string;
   try {
@@ -64,7 +71,7 @@ export async function POST(request: Request) {
       targetAudience: brand.target_audience ?? "",
       exampleCaptions: brand.example_captions ?? [],
       brief,
-      postCount,
+      recipe,
     });
 
     const { data: batch, error: batchError } = await supabase
@@ -137,12 +144,20 @@ export async function POST(request: Request) {
       kind: "text",
       provider: "anthropic",
       model: BATCH_MODEL,
-      input: { brief, postCount, promptVersion: result.promptVersion },
+      input: {
+        brief,
+        recipe,
+        recipeLabel: describeRecipe(recipe),
+        promptVersion: result.promptVersion,
+      },
       output: {
         batchId: batch.id,
         title: result.title,
         posts: result.posts.length,
         slides: slideRows.length,
+        // Logged next to what came back so an under-delivering batch is
+        // visible in the audit trail, not only in a toast the user dismissed.
+        requestedSlides: totalSlides(recipe),
         warnings: result.warnings,
       },
       inputTokens: result.usage.inputTokens,
@@ -172,7 +187,7 @@ export async function POST(request: Request) {
       kind: "text",
       provider: "anthropic",
       model: BATCH_MODEL,
-      input: { brief, postCount },
+      input: { brief, recipe, recipeLabel: describeRecipe(recipe) },
       output: {},
       ok: false,
       error: message,

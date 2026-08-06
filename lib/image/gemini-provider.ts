@@ -1,7 +1,10 @@
 import "server-only";
 
 import {
+  DEFAULT_RETRY_AFTER_MS,
   megapixelsOf,
+  parseRetryAfterMs,
+  RateLimitError,
   readImageSize,
   sniffImageType,
   type GenerateImageParams,
@@ -106,6 +109,16 @@ export class GeminiImageProvider implements ImageProvider {
     const raw = await response.text();
 
     if (!response.ok) {
+      // Rate limiting is a wait, not a failure — the queue needs to tell them
+      // apart, so it gets its own error type carrying how long to hold off.
+      if (response.status === 429) {
+        throw new RateLimitError(
+          describeGeminiError(response.status, raw),
+          parseRetryAfterMs(raw) ??
+            retryAfterFromHeader(response) ??
+            DEFAULT_RETRY_AFTER_MS,
+        );
+      }
       throw new Error(describeGeminiError(response.status, raw));
     }
 
@@ -157,6 +170,14 @@ export class GeminiImageProvider implements ImageProvider {
       outputTokens: payload.usage?.total_output_tokens,
     };
   }
+}
+
+/** The standard HTTP header, in case Google sends it instead of RetryInfo. */
+function retryAfterFromHeader(response: Response): number | null {
+  const value = response.headers.get("retry-after");
+  if (!value) return null;
+  const seconds = Number(value);
+  return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds * 1000) : null;
 }
 
 /** Google puts the useful text in `error.message`; the HTTP reason alone is useless. */
