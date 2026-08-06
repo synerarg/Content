@@ -49,10 +49,13 @@ export default async function BatchPage({
                       background_status, background_error, background_attempts))`,
     )
     .eq("id", id)
+    .is("deleted_at", null)
     .maybeSingle();
 
   // RLS filters other workspaces out, so a foreign batch reads as missing
-  // rather than forbidden — which is the behaviour we want.
+  // rather than forbidden — which is the behaviour we want. A soft-deleted one
+  // reads the same way, so navigating back to a deleted batch lands on the
+  // not-found page instead of a half-working screen.
   if (!batch || !batch.brands) {
     notFound();
   }

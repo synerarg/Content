@@ -33,6 +33,9 @@ export default async function ContenidoPage() {
       .select(
         "id, title, brief, status, created_at, brands(name), posts(id, type, slides(background_status))",
       )
+      // Soft-deleted batches are hidden here but still recoverable by the
+      // Deshacer in the toast. Every read of this table filters on it.
+      .is("deleted_at", null)
       .order("created_at", { ascending: false }),
   ]);
 

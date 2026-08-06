@@ -25,6 +25,7 @@ const TENANT_TABLES = [
   "content_batches",
   "posts",
   "slides",
+  "slide_backgrounds",
   // A VIEW, and the reason it is in this list. Postgres views run as their
   // owner unless created `with (security_invoker = on)`; the owner here is
   // postgres, which bypasses RLS. Get that wrong and this view hands every

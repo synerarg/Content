@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, LayoutTemplate, Palette, Settings } from "lucide-react";
+import {
+  CircleQuestionMark,
+  LayoutGrid,
+  LayoutTemplate,
+  Palette,
+  Settings,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
@@ -10,6 +16,7 @@ const NAV_ITEMS = [
   { href: "/contenido", label: "Contenido", icon: LayoutGrid },
   { href: "/plantillas", label: "Plantillas", icon: LayoutTemplate },
   { href: "/configuracion", label: "Configuración", icon: Settings },
+  { href: "/ayuda", label: "Ayuda", icon: CircleQuestionMark },
 ] as const;
 
 /**

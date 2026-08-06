@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { requireWorkspaceId } from "@/lib/workspace";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -280,13 +281,25 @@ export async function setBatchStatus(
   return { ok: true };
 }
 
+/**
+ * Soft-delete: flag it, do not remove it.
+ *
+ * A batch is an afternoon of copy plus several minutes of paid image
+ * generation, sitting behind one confirm click. Flagging costs nothing and
+ * makes the Deshacer in the toast possible; a real DELETE would cascade posts,
+ * slides and background history past any hope of recovery.
+ *
+ * Nothing purges these yet. That is deliberate — an automatic purge needs a
+ * scheduled job this deployment does not have, and until then a hidden row is
+ * far cheaper than a lost one.
+ */
 export async function deleteBatch(batchId: string): Promise<ActionResult> {
   const supabase = await createClient();
-  // posts and slides cascade from the batch.
   const { data, error } = await supabase
     .from("content_batches")
-    .delete()
+    .update({ deleted_at: new Date().toISOString() })
     .eq("id", batchId)
+    .is("deleted_at", null)
     .select("id")
     .maybeSingle();
 
@@ -295,4 +308,327 @@ export async function deleteBatch(batchId: string): Promise<ActionResult> {
 
   revalidatePath("/contenido");
   return { ok: true };
+}
+
+export async function restoreBatch(batchId: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("content_batches")
+    .update({ deleted_at: null })
+    .eq("id", batchId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) return { ok: false, error: error.message };
+  if (!data) return { ok: false, error: "No se pudo restaurar el lote." };
+
+  revalidatePath("/contenido");
+  return { ok: true };
+}
+
+/*
+  ---------------------------------------------------------------------------
+  Background history
+  ---------------------------------------------------------------------------
+*/
+
+/** How many attempts stay browsable per slide. */
+const HISTORY_LIMIT = 5;
+
+export type SlideBackground = {
+  id: string;
+  storagePath: string;
+  signedUrl: string | null;
+  prompt: string | null;
+  seed: number | null;
+  createdAt: string;
+};
+
+/**
+ * Record a generated background against its slide, keeping the last five.
+ *
+ * Pruning deletes the ROW, never the Storage object: an orphaned file costs a
+ * fraction of a cent, and deleting one that is still referenced costs a
+ * regeneration. Reaping storage is a separate job with different stakes.
+ */
+export async function recordSlideBackground(entry: {
+  slideId: string;
+  storagePath: string;
+  prompt?: string | null;
+  seed?: number | null;
+  provider?: string | null;
+  model?: string | null;
+}): Promise<ActionResult> {
+  try {
+    const workspaceId = await requireWorkspaceId();
+    const supabase = await createClient();
+
+    const { error } = await supabase.from("slide_backgrounds").upsert(
+      {
+        workspace_id: workspaceId,
+        slide_id: entry.slideId,
+        storage_path: entry.storagePath,
+        prompt: entry.prompt ?? null,
+        seed: entry.seed ?? null,
+        provider: entry.provider ?? null,
+        model: entry.model ?? null,
+      },
+      { onConflict: "slide_id,storage_path", ignoreDuplicates: true },
+    );
+
+    if (error) return { ok: false, error: error.message };
+
+    const { data: rows } = await supabase
+      .from("slide_backgrounds")
+      .select("id")
+      .eq("slide_id", entry.slideId)
+      .order("created_at", { ascending: false });
+
+    const stale = (rows ?? []).slice(HISTORY_LIMIT).map((row) => row.id);
+    if (stale.length > 0) {
+      await supabase.from("slide_backgrounds").delete().in("id", stale);
+    }
+
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Error inesperado.",
+    };
+  }
+}
+
+const SIGNED_URL_TTL = 60 * 60;
+
+/** Previous backgrounds for a slide, newest first, with fresh signed URLs. */
+export async function listSlideBackgrounds(
+  slideId: string,
+): Promise<{ ok: true; items: SlideBackground[] } | { ok: false; error: string }> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("slide_backgrounds")
+    .select("id, storage_path, prompt, seed, created_at")
+    .eq("slide_id", slideId)
+    .order("created_at", { ascending: false })
+    .limit(HISTORY_LIMIT);
+
+  if (error) return { ok: false, error: error.message };
+
+  const paths = (data ?? []).map((row) => row.storage_path);
+  const signedByPath = new Map<string, string>();
+
+  if (paths.length > 0) {
+    // One call for the set rather than one per item — the gallery opens on a
+    // click and a round trip per thumbnail would be visible.
+    const { data: signed } = await supabase.storage
+      .from("generated")
+      .createSignedUrls(paths, SIGNED_URL_TTL);
+    for (const item of signed ?? []) {
+      if (item.path && item.signedUrl) signedByPath.set(item.path, item.signedUrl);
+    }
+  }
+
+  return {
+    ok: true,
+    items: (data ?? []).map((row) => ({
+      id: row.id,
+      storagePath: row.storage_path,
+      signedUrl: signedByPath.get(row.storage_path) ?? null,
+      prompt: row.prompt,
+      seed: row.seed,
+      createdAt: row.created_at,
+    })),
+  };
+}
+
+/*
+  ---------------------------------------------------------------------------
+  Duplication
+  ---------------------------------------------------------------------------
+
+  Copies EVERYTHING — template, slots, format, background reference and the
+  scene brief — because a duplicate that drops the background is not a starting
+  point, it is a chore. The copy points at the same Storage object rather than
+  re-generating: the image already exists and is already paid for.
+*/
+
+export async function duplicateBatch(
+  batchId: string,
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  try {
+    const workspaceId = await requireWorkspaceId();
+    const supabase = await createClient();
+
+    const { data: source, error: sourceError } = await supabase
+      .from("content_batches")
+      .select(
+        `id, title, brief, brand_id,
+         posts (id, position, type, caption, hashtags, cta,
+                slides (position, template_slug, format, slots, background_path,
+                        background_status, generation_params))`,
+      )
+      .eq("id", batchId)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    if (sourceError) return { ok: false, error: sourceError.message };
+    if (!source) return { ok: false, error: "No se encontró el lote." };
+
+    const { data: batch, error: batchError } = await supabase
+      .from("content_batches")
+      .insert({
+        workspace_id: workspaceId,
+        brand_id: source.brand_id,
+        title: `${source.title} (copia)`,
+        brief: source.brief,
+        status: "ready",
+      })
+      .select("id")
+      .single();
+
+    if (batchError) return { ok: false, error: batchError.message };
+
+    const sourcePosts = (source.posts ?? [])
+      .slice()
+      .sort((a, b) => a.position - b.position);
+
+    if (sourcePosts.length > 0) {
+      const { data: newPosts, error: postsError } = await supabase
+        .from("posts")
+        .insert(
+          sourcePosts.map((post) => ({
+            workspace_id: workspaceId,
+            batch_id: batch.id,
+            position: post.position,
+            type: post.type,
+            caption: post.caption,
+            hashtags: post.hashtags,
+            cta: post.cta,
+          })),
+        )
+        .select("id, position");
+
+      if (postsError) return { ok: false, error: postsError.message };
+
+      const idByPosition = new Map(
+        (newPosts ?? []).map((row) => [row.position, row.id]),
+      );
+
+      const slideRows = sourcePosts.flatMap((post) => {
+        const newPostId = idByPosition.get(post.position);
+        if (!newPostId) return [];
+
+        return (post.slides ?? []).map((slide) => ({
+          workspace_id: workspaceId,
+          post_id: newPostId,
+          position: slide.position,
+          template_slug: slide.template_slug,
+          format: slide.format,
+          slots: slide.slots as never,
+          background_path: slide.background_path,
+          // Kept in step with the path: the `slides_ready_has_path` constraint
+          // rejects a 'ready' row with no background, and a copied slide that
+          // has one is genuinely ready.
+          background_status: slide.background_path
+            ? ("ready" as const)
+            : ("pending" as const),
+          generation_params: slide.generation_params as never,
+        }));
+      });
+
+      if (slideRows.length > 0) {
+        const { error: slidesError } = await supabase
+          .from("slides")
+          .insert(slideRows);
+        if (slidesError) return { ok: false, error: slidesError.message };
+      }
+    }
+
+    revalidatePath("/contenido");
+    return { ok: true, id: batch.id };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Error inesperado.",
+    };
+  }
+}
+
+/** Duplicate one piece inside its own batch, appended at the end. */
+export async function duplicatePost(
+  postId: string,
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  try {
+    const workspaceId = await requireWorkspaceId();
+    const supabase = await createClient();
+
+    const { data: source, error: sourceError } = await supabase
+      .from("posts")
+      .select(
+        `id, batch_id, type, caption, hashtags, cta,
+         slides (position, template_slug, format, slots, background_path,
+                 background_status, generation_params)`,
+      )
+      .eq("id", postId)
+      .maybeSingle();
+
+    if (sourceError) return { ok: false, error: sourceError.message };
+    if (!source) return { ok: false, error: "No se encontró la pieza." };
+
+    // Appended rather than inserted beside the original: `posts` has no unique
+    // constraint on position, but shifting every sibling to make room is a lot
+    // of writes to put a copy one row higher.
+    const { data: siblings } = await supabase
+      .from("posts")
+      .select("position")
+      .eq("batch_id", source.batch_id)
+      .order("position", { ascending: false })
+      .limit(1);
+
+    const nextPosition = (siblings?.[0]?.position ?? -1) + 1;
+
+    const { data: post, error: postError } = await supabase
+      .from("posts")
+      .insert({
+        workspace_id: workspaceId,
+        batch_id: source.batch_id,
+        position: nextPosition,
+        type: source.type,
+        caption: source.caption,
+        hashtags: source.hashtags,
+        cta: source.cta,
+      })
+      .select("id")
+      .single();
+
+    if (postError) return { ok: false, error: postError.message };
+
+    const slideRows = (source.slides ?? []).map((slide) => ({
+      workspace_id: workspaceId,
+      post_id: post.id,
+      position: slide.position,
+      template_slug: slide.template_slug,
+      format: slide.format,
+      slots: slide.slots as never,
+      background_path: slide.background_path,
+      background_status: slide.background_path
+        ? ("ready" as const)
+        : ("pending" as const),
+      generation_params: slide.generation_params as never,
+    }));
+
+    if (slideRows.length > 0) {
+      const { error: slidesError } = await supabase.from("slides").insert(slideRows);
+      if (slidesError) return { ok: false, error: slidesError.message };
+    }
+
+    revalidatePath(`/contenido/${source.batch_id}`);
+    return { ok: true, id: post.id };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Error inesperado.",
+    };
+  }
 }

@@ -7,6 +7,7 @@ import {
   markSlidePending,
   markSlideQueued,
   markSlideRunning,
+  recordSlideBackground,
   resetStaleBackgrounds,
   setBatchStatus,
   setSlideBackground,
@@ -270,6 +271,16 @@ export function useBackgroundQueue({
           // revoke every blob URL on screen, once per completed slide.
           false,
         );
+
+        // Archive the attempt so this regeneration can be undone. Written
+        // AFTER the slide points at it, because a history entry for a
+        // background the slide never adopted would be misleading.
+        await recordSlideBackground({
+          slideId: item.slideId,
+          storagePath: payload.path,
+          prompt: payload.prompt ?? null,
+          seed: payload.seed ?? null,
+        });
 
         patch(item.slideId, {
           status: "ready",

@@ -103,6 +103,8 @@ public by design and safe; everything else is not.
                                      slides — the background queue's state  (Phase 7)
 20260805001100_brand_history.sql     brand_published_posts + brands.content_analysis
                                      — what the brand already published  (Phase 7)
+20260805001200_history_and_soft_...  slide_backgrounds (last 5 per slide) +
+                                     content_batches.deleted_at  (Phase 7)
 ```
 
 ### RLS design (applies to every table)
@@ -503,6 +505,36 @@ level 1 — the cheap, high-impact half — is built:
 - Elapsed-time readout after 5 s with the expected range on image generation; help
   tooltips on tone of voice, photographic style and lighting; the editor's template
   dropdown replaced by live thumbnails rendered in the brand's real tokens.
+
+### Nielsen heuristics — level 3 (Phase 7)
+
+- **Regenerating a background no longer destroys the old one.** `slide_backgrounds` keeps
+  the last five attempts per slide with a gallery to restore any of them. This mattered
+  more than it looks: image generation is non-deterministic, so "just generate it again"
+  never recovered what the second click replaced.
+- **Deleting a batch is reversible.** `content_batches.deleted_at` plus a Deshacer in the
+  toast. **Nothing purges these rows** — an automatic purge needs a scheduled job this
+  deployment does not have, and a hidden row is much cheaper than a lost one. Every read
+  of the table filters `deleted_at is null`; a new one that forgets will resurrect deleted
+  batches.
+- **Duplicar marca / lote / pieza**, copying everything including background references
+  (the same Storage object, already paid for). Two deliberate exceptions, both documented
+  at the call site: a duplicated brand does NOT inherit the published history or its angle
+  analysis (those describe what *that* client posted), and duplicated `brand_fonts` rows
+  point at the original brand's storage paths — safe within a workspace, but deleting the
+  original takes the copy's fonts with it until the copy is re-saved.
+- **Keyboard shortcuts** (`lib/shortcuts.tsx`) with a `?` overlay built from the same
+  array the screen registers, so the cheat sheet cannot drift from what works. Shortcuts
+  never fire while typing, except Ctrl+S and Ctrl+Enter — the two whose whole point is to
+  fire while you are in a field.
+- **`/ayuda`**, the advanced per-slide disclosure, and a zero-data state for
+  `/configuracion`.
+
+**Deferred with justification: undo/redo of text edits.** Ctrl+Z inside the editor was in
+the spec and is not built. With 2 s autosave, per-field flush on blur and a restorable
+background history, the data-loss case it was there to cover is largely closed, and doing
+it properly means an edit stack per field that survives re-renders — meaningful work for
+what is now a convenience. The browser's native undo still works inside each field.
 
 **Deferred with justification: token-by-token streaming.** The generator uses structured
 outputs, which is what makes typed template slots work and what lets a new template teach

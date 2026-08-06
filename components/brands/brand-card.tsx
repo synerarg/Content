@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { MoreHorizontal, Trash2 } from "lucide-react";
+import { CopyPlus, MoreHorizontal, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { deleteBrand } from "@/app/(app)/marcas/actions";
+import { deleteBrand, duplicateBrand } from "@/app/(app)/marcas/actions";
+import { notifyError } from "@/lib/notify";
 import { publicAssetUrl } from "@/lib/storage";
 import { recordToPalette } from "@/lib/schemas/brand";
 import { Button } from "@/components/ui/button";
@@ -108,6 +109,21 @@ export function BrandCard({ brand }: { brand: BrandCardData }) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onSelect={async () => {
+                const result = await duplicateBrand(brand.id);
+                if (!result.ok) {
+                  notifyError(new Error(result.error));
+                  return;
+                }
+                toast.success("Marca duplicada.");
+                router.push(`/marcas/${result.id}`);
+                router.refresh();
+              }}
+            >
+              <CopyPlus className="size-4" />
+              Duplicar
+            </DropdownMenuItem>
             <DropdownMenuItem
               variant="destructive"
               onSelect={() => setConfirmOpen(true)}

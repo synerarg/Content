@@ -208,6 +208,7 @@ export type Database = {
           brand_id: string
           brief: string
           created_at: string
+          deleted_at: string | null
           id: string
           status: Database["public"]["Enums"]["batch_status"]
           title: string
@@ -218,6 +219,7 @@ export type Database = {
           brand_id: string
           brief?: string
           created_at?: string
+          deleted_at?: string | null
           id?: string
           status?: Database["public"]["Enums"]["batch_status"]
           title: string
@@ -228,6 +230,7 @@ export type Database = {
           brand_id?: string
           brief?: string
           created_at?: string
+          deleted_at?: string | null
           id?: string
           status?: Database["public"]["Enums"]["batch_status"]
           title?: string
@@ -373,6 +376,57 @@ export type Database = {
           },
           {
             foreignKeyName: "posts_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      slide_backgrounds: {
+        Row: {
+          created_at: string
+          id: string
+          model: string | null
+          prompt: string | null
+          provider: string | null
+          seed: number | null
+          slide_id: string
+          storage_path: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          model?: string | null
+          prompt?: string | null
+          provider?: string | null
+          seed?: number | null
+          slide_id: string
+          storage_path: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          model?: string | null
+          prompt?: string | null
+          provider?: string | null
+          seed?: number | null
+          slide_id?: string
+          storage_path?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "slide_backgrounds_slide_id_fkey"
+            columns: ["slide_id"]
+            isOneToOne: false
+            referencedRelation: "slides"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "slide_backgrounds_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"

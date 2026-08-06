@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { StatTile } from "@/components/config/stat-tile";
@@ -235,6 +236,28 @@ export default async function ConfiguracionPage() {
       />
 
       <div className="space-y-10 px-6 py-8 md:px-8">
+        {/*
+          The zero-data state teaches instead of showing US$0 four times. A
+          workspace that has never generated has nothing to audit yet, and
+          saying what will appear here is more use than an empty table.
+        */}
+        {totals.calls === 0 ? (
+          <section className="space-y-2 rounded-xl border border-dashed border-border px-4 py-6 text-center">
+            <p className="text-sm">Todavía no se registró ningún consumo</p>
+            <p className="mx-auto max-w-md text-sm text-muted-foreground">
+              Cada llamada de IA queda registrada acá desde la primera: qué se
+              pidió, cuánto tardó, cuánto costó y si falló. Generá un lote desde{" "}
+              <Link
+                href="/contenido"
+                className="text-[var(--synera-accent)] underline-offset-4 hover:underline"
+              >
+                Contenido
+              </Link>{" "}
+              y volvé.
+            </p>
+          </section>
+        ) : null}
+
         <section className="space-y-3">
           <h2 className="text-sm font-semibold text-muted-foreground">
             Consumo

@@ -25,7 +25,19 @@ const SAVED_LINGER_MS = 2500;
 export function useAutosave() {
   const [status, setStatus] = useState<SaveStatus>("idle");
 
-  const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  /*
+    The save function is stored beside its timer, not just the timer.
+
+    `flushAll` (Ctrl+S) has to be able to run work it was never handed — it
+    knows only that something is pending, not what. Keeping the thunk here is
+    what lets "guardar ahora" mean all of it rather than one field.
+  */
+  const timers = useRef(
+    new Map<
+      string,
+      { timer: ReturnType<typeof setTimeout>; save: () => Promise<boolean> }
+    >(),
+  );
   const inFlight = useRef(0);
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -34,7 +46,7 @@ export function useAutosave() {
   useEffect(() => {
     const pending = timers.current;
     return () => {
-      for (const timer of pending.values()) clearTimeout(timer);
+      for (const entry of pending.values()) clearTimeout(entry.timer);
       pending.clear();
       if (savedTimer.current) clearTimeout(savedTimer.current);
     };
@@ -73,13 +85,13 @@ export function useAutosave() {
   const schedule = useCallback(
     (key: string, save: () => Promise<boolean>) => {
       const existing = timers.current.get(key);
-      if (existing) clearTimeout(existing);
+      if (existing) clearTimeout(existing.timer);
 
       setStatus("pending");
-      timers.current.set(
-        key,
-        setTimeout(() => void run(key, save), DEBOUNCE_MS),
-      );
+      timers.current.set(key, {
+        timer: setTimeout(() => void run(key, save), DEBOUNCE_MS),
+        save,
+      });
     },
     [run],
   );
@@ -95,11 +107,21 @@ export function useAutosave() {
     (key: string, save: () => Promise<boolean>) => {
       const existing = timers.current.get(key);
       if (!existing) return;
-      clearTimeout(existing);
+      clearTimeout(existing.timer);
       void run(key, save);
     },
     [run],
   );
 
-  return { status, schedule, flush };
+  /** Commit everything waiting. Bound to Ctrl+S. */
+  const flushAll = useCallback(() => {
+    // Snapshotted before iterating: `run` deletes from this map as it goes.
+    const entries = [...timers.current.entries()];
+    for (const [key, entry] of entries) {
+      clearTimeout(entry.timer);
+      void run(key, entry.save);
+    }
+  }, [run]);
+
+  return { status, schedule, flush, flushAll };
 }

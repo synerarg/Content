@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   Copy,
+  CopyPlus,
   Loader2,
   Package,
   RefreshCw,
@@ -29,9 +30,13 @@ import {
 import { buildCaptionMarkdown, buildZip, slugify, type ZipEntry } from "@/lib/export/zip";
 import {
   deleteBatch,
+  duplicateBatch,
+  duplicatePost,
+  restoreBatch,
   updatePost,
   updateSlideSlots,
 } from "@/app/(app)/contenido/actions";
+import { BackgroundHistory } from "@/components/batch/background-history";
 import {
   useBackgroundQueue,
   type BackgroundStatus,
@@ -49,6 +54,8 @@ import {
 import { FORMATS, type FormatKey } from "@/templates/types";
 import { notifyError } from "@/lib/notify";
 import { useAutosave } from "@/lib/use-autosave";
+import { useShortcuts, type Shortcut } from "@/lib/shortcuts";
+import { ShortcutOverlay } from "@/components/app-shell/shortcut-overlay";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { SaveIndicator } from "@/components/ui/save-indicator";
@@ -408,7 +415,28 @@ export function BatchDetail({
       toast.error(result.error);
       return;
     }
-    toast.success("Lote eliminado.");
+    /*
+      Soft-deleted, so this is genuinely reversible for as long as the toast is
+      up — and in fact for longer, since nothing purges the row. The 8 s window
+      is how long the offer stays visible, not how long the data survives.
+    */
+    toast.success("Lote eliminado.", {
+      duration: 8000,
+      action: {
+        label: "Deshacer",
+        onClick: async () => {
+          const undone = await restoreBatch(batchId);
+          if (!undone.ok) {
+            notifyError(new Error(undone.error));
+            return;
+          }
+          toast.success("Lote restaurado.");
+          router.push(`/contenido/${batchId}`);
+          router.refresh();
+        },
+      },
+    });
+
     setConfirmDelete(false);
     router.push("/contenido");
     router.refresh();
@@ -439,8 +467,52 @@ export function BatchDetail({
           ? `${incomplete.length} placa${incomplete.length === 1 ? "" : "s"} sin fondo o con textos obligatorios vacíos.`
           : null;
 
+  /*
+    Registered here rather than app-wide: every one of these acts on THIS
+    batch, and a shortcut that silently does nothing on four of five screens
+    teaches people not to trust any of them.
+  */
+  const shortcuts: Shortcut[] = [
+    {
+      key: "s",
+      mod: true,
+      whileTyping: true,
+      label: "Guardar ahora",
+      description: "Fuerza el autoguardado sin esperar los 2 segundos",
+      run: () => autosave.flushAll(),
+    },
+    {
+      key: "Enter",
+      mod: true,
+      whileTyping: true,
+      label: "Generar fondos",
+      description: "Arranca la cola con las placas que faltan",
+      run: () => {
+        if (queue.running) return;
+        void runQueue(
+          allSlides.filter(
+            (slide) => (queue.states[slide.id]?.status ?? "pending") !== "ready",
+          ),
+        );
+      },
+    },
+    {
+      key: "e",
+      mod: true,
+      label: "Descargar ZIP",
+      description: "Exporta el lote si está completo",
+      run: () => {
+        if (exportBlockedReason === null && !exporting) void handleExportZip();
+      },
+    },
+  ];
+
+  useShortcuts(shortcuts);
+
   return (
     <div className="space-y-8 px-6 py-8 md:px-8">
+      <ShortcutOverlay shortcuts={shortcuts} />
+
       <ConfirmDialog
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
@@ -448,8 +520,8 @@ export function BatchDetail({
         description={
           <>
             Se elimina <span className="text-foreground">{batchTitle}</span> con
-            sus {posts.length} piezas y {totalSlides} placas, incluidos los
-            fondos ya generados. No se puede deshacer.
+            sus {posts.length} piezas y {totalSlides} placas. Vas a poder
+            deshacerlo desde el aviso que aparece después.
           </>
         }
         confirmLabel={deleting ? "Eliminando…" : "Eliminar el lote"}
@@ -474,6 +546,23 @@ export function BatchDetail({
         </div>
 
         <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={async () => {
+              const result = await duplicateBatch(batchId);
+              if (!result.ok) {
+                notifyError(new Error(result.error));
+                return;
+              }
+              toast.success("Lote duplicado.");
+              router.push(`/contenido/${result.id}`);
+              router.refresh();
+            }}
+          >
+            <CopyPlus className="size-4" />
+            Duplicar
+          </Button>
           <Button
             variant="ghost"
             size="sm"
@@ -574,6 +663,23 @@ export function BatchDetail({
             <span className="text-xs text-muted-foreground">
               {post.slides.length} placa{post.slides.length === 1 ? "" : "s"}
             </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-auto"
+              onClick={async () => {
+                const result = await duplicatePost(post.id);
+                if (!result.ok) {
+                  notifyError(new Error(result.error));
+                  return;
+                }
+                toast.success("Pieza duplicada al final del lote.");
+                router.refresh();
+              }}
+            >
+              <CopyPlus className="size-4" />
+              Duplicar pieza
+            </Button>
           </div>
 
           <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
@@ -616,6 +722,64 @@ export function BatchDetail({
                         {state.status === "ready" ? "Regenerar" : "Generar"}
                       </Button>
                     </div>
+
+                    {/*
+                      Progressive disclosure: the scene brief and the seed are
+                      real controls, but nobody needs them to review a batch.
+                      Collapsed by default, and the defaults work without ever
+                      opening this.
+                    */}
+                    <details className="group">
+                      <summary className="cursor-pointer list-none px-2 text-[11px] text-muted-foreground marker:content-none hover:text-foreground">
+                        Avanzado
+                      </summary>
+                      <dl className="mt-2 space-y-2 rounded-lg border border-border p-2 text-[11px]">
+                        <div>
+                          <dt className="text-muted-foreground">Escena pedida</dt>
+                          <dd className="break-words">
+                            {slide.backgroundBrief || "—"}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-muted-foreground">Plantilla</dt>
+                          <dd className="font-mono">{slide.templateSlug}</dd>
+                        </div>
+                        {state.attempts > 0 ? (
+                          <div>
+                            <dt className="text-muted-foreground">Intentos</dt>
+                            <dd className="tabular-nums">{state.attempts}</dd>
+                          </div>
+                        ) : null}
+                      </dl>
+                    </details>
+
+                    {state.status === "ready" ? (
+                      <BackgroundHistory
+                        slideId={slide.id}
+                        currentPath={slide.backgroundPath}
+                        onRestored={(path, blobUrl) => {
+                          const previous = objectUrls.current.get(slide.id);
+                          if (previous && previous !== blobUrl) {
+                            URL.revokeObjectURL(previous);
+                          }
+                          objectUrls.current.set(slide.id, blobUrl);
+                          setBackgrounds((current) => ({
+                            ...current,
+                            [slide.id]: blobUrl,
+                          }));
+                          setPosts((current) =>
+                            current.map((p) => ({
+                              ...p,
+                              slides: p.slides.map((s) =>
+                                s.id === slide.id
+                                  ? { ...s, backgroundPath: path }
+                                  : s,
+                              ),
+                            })),
+                          );
+                        }}
+                      />
+                    ) : null}
 
                     {/*
                       The failure reason stays on screen until the slide is

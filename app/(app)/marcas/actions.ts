@@ -233,3 +233,81 @@ export async function deletePublishedPost(
   revalidatePath(`/marcas/${data.brand_id}/historial`);
   return { ok: true };
 }
+
+/**
+ * Copy a brand as a starting point for a similar client.
+ *
+ * Copies identity, palette, typography, voice and art direction — everything
+ * that makes the kit — and reuses the same logo object rather than duplicating
+ * the file, since it is almost always replaced immediately anyway.
+ *
+ * Deliberately NOT copied: the published history and its angle analysis. Those
+ * describe what THAT client actually posted; carrying them onto a different
+ * brand would forbid angles it has never used.
+ */
+export async function duplicateBrand(brandId: string): Promise<ActionResult> {
+  try {
+    const workspaceId = await requireWorkspaceId();
+    const supabase = await createClient();
+
+    const { data: source, error: sourceError } = await supabase
+      .from("brands")
+      .select(
+        "name, tagline, logo_path, palette, typography, tone_of_voice, target_audience, example_captions, art_direction",
+      )
+      .eq("id", brandId)
+      .maybeSingle();
+
+    if (sourceError) return { ok: false, error: sourceError.message };
+    if (!source) return { ok: false, error: "No se encontró la marca." };
+
+    // Brand names are unique per workspace, case-insensitively, so the copy
+    // needs its own. Numbered rather than "(copia)" alone so duplicating twice
+    // does not collide on the second attempt.
+    const { data: existing } = await supabase
+      .from("brands")
+      .select("name")
+      .ilike("name", `${source.name} (copia%`);
+
+    const suffix = (existing?.length ?? 0) === 0 ? "" : ` ${(existing?.length ?? 0) + 1}`;
+    const name = `${source.name} (copia${suffix})`;
+
+    const { data: created, error } = await supabase
+      .from("brands")
+      .insert({ ...source, workspace_id: workspaceId, name })
+      .select("id")
+      .single();
+
+    if (error) return { ok: false, error: describeError(error) };
+
+    /*
+      Font FILES are shared, not re-downloaded: brand_fonts rows point at
+      storage paths under the ORIGINAL brand's folder. That is safe because the
+      bucket is workspace-scoped and both brands live in the same workspace —
+      but it does mean deleting the original brand takes the copy's fonts with
+      it. Re-saving the copy re-syncs them under its own path.
+    */
+    const { data: fonts } = await supabase
+      .from("brand_fonts")
+      .select("family, weight, style, storage_path, source")
+      .eq("brand_id", brandId);
+
+    if (fonts && fonts.length > 0) {
+      await supabase.from("brand_fonts").insert(
+        fonts.map((font) => ({
+          ...font,
+          workspace_id: workspaceId,
+          brand_id: created.id,
+        })),
+      );
+    }
+
+    revalidatePath("/marcas");
+    return { ok: true, id: created.id };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Error inesperado.",
+    };
+  }
+}
