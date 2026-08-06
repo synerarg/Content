@@ -9,6 +9,9 @@ import { deleteBrand } from "@/app/(app)/marcas/actions";
 import { publicAssetUrl } from "@/lib/storage";
 import { recordToPalette } from "@/lib/schemas/brand";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,19 +30,21 @@ export type BrandCardData = {
 export function BrandCard({ brand }: { brand: BrandCardData }) {
   const router = useRouter();
   const [deleting, setDeleting] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [typed, setTyped] = useState("");
+
+  /*
+    Deleting a brand cascades to its fonts, its published history and every
+    batch made with it — the most destructive action in the app, and the only
+    one that asks you to type the name. A batch gets the softer confirm because
+    a batch is an afternoon's work; a brand is the client.
+  */
+  const canDelete = typed.trim().toLowerCase() === brand.name.trim().toLowerCase();
 
   const logoUrl = publicAssetUrl(brand.logo_path);
   const tokens = recordToPalette(brand.palette).slice(0, 6);
 
   async function handleDelete() {
-    if (
-      !window.confirm(
-        `¿Eliminar "${brand.name}"? Se borran también sus tipografías y contenido asociado.`,
-      )
-    ) {
-      return;
-    }
-
     setDeleting(true);
     const result = await deleteBrand(brand.id);
     setDeleting(false);
@@ -49,12 +54,46 @@ export function BrandCard({ brand }: { brand: BrandCardData }) {
       return;
     }
 
+    setConfirmOpen(false);
     toast.success("Marca eliminada.");
     router.refresh();
   }
 
   return (
     <div className="group relative rounded-xl border border-border bg-card p-5 transition-colors hover:border-[color-mix(in_oklch,var(--synera-accent)_30%,transparent)]">
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={(open) => {
+          setConfirmOpen(open);
+          if (!open) setTyped("");
+        }}
+        title={`Eliminar "${brand.name}"`}
+        description={
+          <>
+            Se eliminan también sus tipografías, su historial publicado y todo
+            el contenido generado con esta marca. No se puede deshacer.
+          </>
+        }
+        confirmLabel={deleting ? "Eliminando…" : "Eliminar la marca"}
+        destructive
+        pending={deleting || !canDelete}
+        onConfirm={handleDelete}
+      >
+        <div className="space-y-2">
+          <Label htmlFor={`confirm-${brand.id}`} className="text-xs">
+            Escribí <span className="text-foreground">{brand.name}</span> para
+            confirmar
+          </Label>
+          <Input
+            id={`confirm-${brand.id}`}
+            value={typed}
+            autoComplete="off"
+            onChange={(event) => setTyped(event.target.value)}
+            placeholder={brand.name}
+          />
+        </div>
+      </ConfirmDialog>
+
       <div className="absolute right-3 top-3">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -69,7 +108,10 @@ export function BrandCard({ brand }: { brand: BrandCardData }) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem variant="destructive" onSelect={handleDelete}>
+            <DropdownMenuItem
+              variant="destructive"
+              onSelect={() => setConfirmOpen(true)}
+            >
               <Trash2 className="size-4" />
               Eliminar
             </DropdownMenuItem>

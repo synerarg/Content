@@ -14,6 +14,8 @@ import {
   buildSystemPrompt,
   buildUserPrompt,
 } from "@/prompts/post-generation";
+import { CodedError } from "@/lib/errors";
+import { parseWithRetry } from "./parse-with-retry";
 import { estimateCostUsd } from "./pricing";
 
 export const GENERATION_MODEL = "claude-sonnet-5";
@@ -149,7 +151,8 @@ export async function generatePost(
 ): Promise<GeneratePostResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    throw new Error(
+    throw new CodedError(
+      "config",
       "Falta ANTHROPIC_API_KEY. Agregala a .env.local para generar contenido.",
     );
   }
@@ -157,39 +160,48 @@ export async function generatePost(
   const client = new Anthropic({ apiKey });
   const started = Date.now();
 
-  const response = await client.messages.parse({
-    model: GENERATION_MODEL,
-    max_tokens: 8000,
-    // The system block is identical for every brand and every request, which
-    // makes it a stable cacheable prefix. Brand context deliberately goes in
-    // the user turn so it never invalidates that cache.
-    system: [
-      {
-        type: "text",
-        text: buildSystemPrompt(TEMPLATES),
-        cache_control: { type: "ephemeral" },
-      },
-    ],
-    messages: [{ role: "user", content: buildUserPrompt(input) }],
-    output_config: { format: zodOutputFormat(generationSchema) },
-  });
+  const response = await parseWithRetry(() =>
+    client.messages.parse({
+      model: GENERATION_MODEL,
+      max_tokens: 8000,
+      // The system block is identical for every brand and every request, which
+      // makes it a stable cacheable prefix. Brand context deliberately goes in
+      // the user turn so it never invalidates that cache.
+      system: [
+        {
+          type: "text",
+          text: buildSystemPrompt(TEMPLATES),
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+      messages: [{ role: "user", content: buildUserPrompt(input) }],
+      output_config: { format: zodOutputFormat(generationSchema) },
+    }),
+  );
 
   const durationMs = Date.now() - started;
 
   if (response.stop_reason === "refusal") {
-    throw new Error(
+    throw new CodedError(
+      "safety",
       "El modelo rechazó el pedido. Revisá el brief y probá de nuevo.",
     );
   }
   if (response.stop_reason === "max_tokens") {
-    throw new Error(
+    throw new CodedError(
+      "too_long",
       "La respuesta se cortó por límite de tokens. Probá con un brief más corto.",
     );
   }
 
+  // parseWithRetry throws before this when nothing parsed, so reaching here
+  // with a null output is impossible; the check keeps the type narrow.
   const parsed = response.parsed_output;
   if (!parsed) {
-    throw new Error("El modelo no devolvió una respuesta con el formato esperado.");
+    throw new CodedError(
+      "provider",
+      "El modelo no devolvió una respuesta con el formato esperado.",
+    );
   }
 
   const template = getTemplate(parsed.choice.template_slug);

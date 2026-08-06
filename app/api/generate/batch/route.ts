@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireWorkspaceId } from "@/lib/workspace";
 import { generateBatch, BATCH_MODEL } from "@/lib/ai/generate-batch";
 import { logGeneration } from "@/lib/ai/log-generation";
+import { codeOf } from "@/lib/errors";
 import { historyAnalysisSchema } from "@/lib/ai/analyze-history";
 import {
   describeRecipe,
@@ -213,6 +214,9 @@ export async function POST(request: Request) {
       error: message,
     });
 
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: message, code: codeOf(cause) },
+      { status: 500 },
+    );
   }
 }

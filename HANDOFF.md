@@ -226,6 +226,9 @@ template automatically teaches the prompts its slot names and character limits.
 | Two-step angle prohibition, **live A/B** | PASS — without prohibitions the batch produced "Tu competencia ya tiene web" (3rd consecutive run); with them it did not, and found two angles absent from the history |
 | Raw-captions-in-prompt approach, **live A/B** | **FAIL, and it is why the two-step exists** — overlap rose 17%→18.6% and it reused an angle from the list it was given |
 | `content_analysis` round-trip and degradation | PASS — unanalysed `{}`, null, and an older shape all degrade to "no prohibitions" instead of throwing; extra fields still parse |
+| Slot labels / required-slot reflection, 9 asserts | PASS — every template has a required slot and a Spanish label for every field; export gating rejects blank and whitespace-only |
+| Brand readiness, 11 asserts | PASS — each gap detected individually, a freshly created brand correctly blocks on art direction, null input does not throw |
+| Error taxonomy, 17 asserts | PASS — explicit codes beat heuristics; real Gemini/fal/Anthropic messages classify correctly; aborts never report as failures; no English in any user-facing string |
 
 **NOT verified — the important gap:**
 
@@ -450,6 +453,62 @@ each**. It is now 1 click for the copy, 1 to start the queue, and 1 for the ZIP.
 Auto-starting the queue on batch creation was considered and **deliberately rejected** by
 the account owner: reviewing the copy before spending four minutes of generation avoids
 regenerating backgrounds for text that is about to change.
+
+### Nielsen heuristics — level 1 (Phase 7)
+
+A separate spec (`nielsen-heuristics-prompt.md`) turns Nielsen's 10 heuristics into ~60
+acceptance criteria for this app. The full audit is in that document's checklist format;
+level 1 — the cheap, high-impact half — is built:
+
+- **Slot fields are named in Spanish.** The editor used to render the raw JSON keys as
+  labels, so account managers saw `headline`, `swipe_hint` and `item_1`. The registry now
+  carries `slotLabels` beside the existing `slotHints`, and both are shown.
+- **Required vs optional is read off the zod schema** (`isSlotRequired`), the same
+  reflection trick already used for `max_length`. One source of truth, so a template that
+  changes its mandatory slots needs no second edit.
+- **The ZIP export is gated.** Rasterizing a slide with no background or an empty required
+  slot does not fail — it produces a valid PNG with a hole in it. The button now names
+  what is missing. This audit is also what surfaced that `list-tips` required only its
+  heading, so a tips card with no tips passed every check; `item_1` and `item_2` are now
+  required in the schema, which fixes the generation too.
+- **One confirmation component.** `components/ui/confirm-dialog.tsx` on Radix AlertDialog
+  replaces the two `window.confirm` calls. Deleting a brand needs its name typed;
+  deleting a batch does not — a batch is an afternoon, a brand is the client.
+- **Brand readiness is checked before any AI call** (`lib/brand-readiness.ts`): palette,
+  fonts and art direction. A brand missing them blocks the spend with a link to the gap
+  instead of returning a generic background.
+- Determinate ZIP progress bar; `RefreshCw` means regenerate app-wide; formats read "Post
+  de feed (4:5)"; relative dates ("hace 2 horas") in the lists.
+
+### Nielsen heuristics — level 2 (Phase 7)
+
+- **One error surface.** `lib/errors.ts` classifies a failure into eight classes and
+  `lib/notify.ts` renders it as title + why + one action. Routes put an explicit `code` on
+  the wire (`CodedError` → `codeOf`); **string matching is only the fallback**, since
+  provider messages change with versions and are not a contract. A safety refusal
+  deliberately gets NO retry button — pressing it would fail identically and cost another
+  call.
+- **Cancel actually aborts.** `AbortController` in the queue and in all three generation
+  panels. An aborted slide returns to `pending`, never `failed` — nothing is wrong with
+  it. Honest limit, worth knowing: aborting stops the browser waiting and stops the result
+  being written, but does **not** cancel a generation the provider already started, so a
+  cancelled slide may still have cost money.
+- **Autosave, 2 s debounce, with a visible indicator.** Saves were on blur only, so
+  closing the tab mid-field discarded it silently. Saves are keyed per field so editing a
+  caption does not delay the headline typed five seconds earlier; blur still flushes
+  immediately.
+- **Unparseable structured output retries twice, silently** (`lib/ai/parse-with-retry.ts`).
+  Deliberately NOT retried: `refusal` and `max_tokens`, which are deterministic and would
+  just burn calls.
+- Elapsed-time readout after 5 s with the expected range on image generation; help
+  tooltips on tone of voice, photographic style and lighting; the editor's template
+  dropdown replaced by live thumbnails rendered in the brand's real tokens.
+
+**Deferred with justification: token-by-token streaming.** The generator uses structured
+outputs, which is what makes typed template slots work and what lets a new template teach
+the prompt its own limits. Partial JSON cannot be rendered as copy. Streaming *state*
+("escribiendo la pieza 2 de 5") is possible; streaming the text is not, without giving up
+the schema.
 
 ### Where published content comes from
 

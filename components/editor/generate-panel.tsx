@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { Loader2, Sparkles } from "lucide-react";
+import { useRef, useState } from "react";
+import { Loader2, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
+import { notifyError, readErrorPayload } from "@/lib/notify";
 import { formatCostUsd } from "@/lib/ai/pricing";
 import { FORMATS, FORMAT_KEYS, type FormatKey } from "@/templates/types";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,7 @@ export function GeneratePanel({
   const [format, setFormat] = useState<FormatKey | "auto">("auto");
   const [pending, setPending] = useState(false);
   const [last, setLast] = useState<GenerationResponse | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   async function handleGenerate() {
     if (brief.trim().length < 8) {
@@ -56,11 +58,15 @@ export function GeneratePanel({
       return;
     }
 
+    const controller = new AbortController();
+    abortRef.current = controller;
     setPending(true);
+
     try {
       const res = await fetch("/api/generate/text", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           brandId,
           brief,
@@ -68,10 +74,15 @@ export function GeneratePanel({
         }),
       });
 
-      const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Falló la generación.");
+      if (!res.ok) {
+        notifyError(null, {
+          payload: await readErrorPayload(res),
+          retry: handleGenerate,
+        });
+        return;
+      }
 
-      const result = payload as GenerationResponse;
+      const result = (await res.json()) as GenerationResponse;
       setLast(result);
       onGenerated(result);
 
@@ -80,8 +91,9 @@ export function GeneratePanel({
       }
       toast.success("Contenido generado.");
     } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : "Falló la generación.");
+      notifyError(cause, { retry: handleGenerate });
     } finally {
+      abortRef.current = null;
       setPending(false);
     }
   }
@@ -147,8 +159,15 @@ export function GeneratePanel({
           ) : (
             <Sparkles className="size-4" />
           )}
-          {pending ? "Generando…" : "Generar"}
+          {pending ? "Escribiendo el copy…" : "Generar"}
         </Button>
+
+        {pending ? (
+          <Button variant="ghost" onClick={() => abortRef.current?.abort()}>
+            <X className="size-4" />
+            Cancelar
+          </Button>
+        ) : null}
       </div>
 
       {last ? (

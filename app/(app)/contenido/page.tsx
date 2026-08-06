@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { EmptyState } from "@/components/app-shell/empty-state";
 import { CreateBatchPanel } from "@/components/batch/create-batch-panel";
+import { checkBrandReadiness } from "@/lib/brand-readiness";
 import { Button } from "@/components/ui/button";
 
 const TYPE_LABEL: Record<string, string> = {
@@ -23,7 +24,10 @@ export default async function ContenidoPage() {
   const supabase = await createClient();
 
   const [{ data: brands }, { data: batches }] = await Promise.all([
-    supabase.from("brands").select("id, name").order("name"),
+    supabase
+      .from("brands")
+      .select("id, name, palette, typography, art_direction")
+      .order("name"),
     supabase
       .from("content_batches")
       .select(
@@ -69,7 +73,15 @@ export default async function ContenidoPage() {
       />
 
       <div className="space-y-8 px-6 py-8 md:px-8">
-        <CreateBatchPanel brands={brands} />
+        {/* Readiness is computed here, on the server, so the panel can block a
+            spend before the request instead of reporting a bad result after. */}
+        <CreateBatchPanel
+          brands={brands.map((brand) => ({
+            id: brand.id,
+            name: brand.name,
+            readiness: checkBrandReadiness(brand),
+          }))}
+        />
 
         {batches && batches.length > 0 ? (
           <div className="space-y-3">

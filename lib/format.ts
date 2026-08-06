@@ -51,6 +51,41 @@ export function formatDay(day: string | null | undefined): string {
   return dayFormatter.format(new Date(year, month - 1, date));
 }
 
+const relativeFormatter = new Intl.RelativeTimeFormat(LOCALE, { numeric: "auto" });
+
+/**
+ * "hace 2 horas" for anything recent, an absolute date beyond a week.
+ *
+ * Relative reads faster while it is still relative — "hace 2 horas" answers the
+ * question, "06 ago 14:32" makes you do arithmetic. Past a week it inverts:
+ * "hace 3 semanas" is vaguer than the date itself, so it switches back.
+ *
+ * Resolved against `Date.now()` at call time, so where it runs matters:
+ *
+ *   - Client components: fine, re-renders keep it current.
+ *   - DYNAMIC server components: fine. "Now" is request time, and the value is
+ *     never re-rendered on the client, so there is nothing to mismatch. Every
+ *     page under `(app)` is `force-dynamic`, which is what makes the usage in
+ *     the config page safe.
+ *   - STATICALLY rendered components: not safe. "Now" would be build time and
+ *     the string would age silently. Use `formatDateTime` there instead.
+ */
+export function formatRelative(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "—";
+
+  const seconds = Math.round((date.getTime() - Date.now()) / 1000);
+  const abs = Math.abs(seconds);
+
+  if (abs < 45) return "recién";
+  if (abs < 3600) return relativeFormatter.format(Math.round(seconds / 60), "minute");
+  if (abs < 86_400) return relativeFormatter.format(Math.round(seconds / 3600), "hour");
+  if (abs < 7 * 86_400) return relativeFormatter.format(Math.round(seconds / 86_400), "day");
+
+  return dateTimeFormatter.format(date);
+}
+
 export function formatDuration(ms: number | null | undefined): string {
   if (ms === null || ms === undefined || ms <= 0) return "—";
   if (ms < 1000) return `${ms} ms`;

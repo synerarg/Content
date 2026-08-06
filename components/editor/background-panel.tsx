@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ImageIcon, Loader2, RefreshCw, X } from "lucide-react";
+import { ImageIcon, Loader2, RefreshCw, Repeat, X } from "lucide-react";
+import { notifyError, readErrorPayload } from "@/lib/notify";
+import { Elapsed } from "@/components/ui/elapsed";
 import { toast } from "sonner";
 import { toObjectUrl } from "@/lib/export/rasterize";
 import { formatCostUsd } from "@/lib/ai/pricing";
@@ -38,7 +40,10 @@ export function BackgroundPanel({
   const [scene, setScene] = useState("");
   const [pending, setPending] = useState(false);
   const [last, setLast] = useState<ImageResponse | null>(null);
+  /** When the in-flight generation began, for the elapsed-time readout. */
+  const [startedAt, setStartedAt] = useState<number | null>(null);
   const objectUrlRef = useRef<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   // Revoke the previous blob when it is replaced or the panel unmounts.
   useEffect(() => {
@@ -55,11 +60,16 @@ export function BackgroundPanel({
       return;
     }
 
+    const controller = new AbortController();
+    abortRef.current = controller;
     setPending(true);
+    setStartedAt(Date.now());
+
     try {
       const res = await fetch("/api/generate/image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           brandId,
           brief: effectiveScene,
@@ -69,10 +79,15 @@ export function BackgroundPanel({
         }),
       });
 
-      const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Falló la generación.");
+      if (!res.ok) {
+        notifyError(null, {
+          payload: await readErrorPayload(res),
+          retry: () => generate(reuseSeed),
+        });
+        return;
+      }
 
-      const result = payload as ImageResponse;
+      const result = (await res.json()) as ImageResponse;
 
       // The signed URL is a different origin. Rendering it directly would taint
       // the canvas and make the PNG export throw SecurityError, so it becomes a
@@ -86,9 +101,11 @@ export function BackgroundPanel({
       onBackgroundChange(blobUrl);
       toast.success("Fondo generado.");
     } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : "Falló la generación.");
+      notifyError(cause, { retry: () => generate(reuseSeed) });
     } finally {
+      abortRef.current = null;
       setPending(false);
+      setStartedAt(null);
     }
   }
 
@@ -131,8 +148,12 @@ export function BackgroundPanel({
           onClick={() => generate(false)}
           disabled={pending}
         >
+          {/* RefreshCw means regenerate, app-wide; ImageIcon is only ever a
+              first generation. Same rule in the batch detail. */}
           {pending ? (
             <Loader2 className="size-4 animate-spin" />
+          ) : backgroundUrl ? (
+            <RefreshCw className="size-4" />
           ) : (
             <ImageIcon className="size-4" />
           )}
@@ -144,14 +165,24 @@ export function BackgroundPanel({
             variant="outline"
             onClick={() => generate(true)}
             disabled={pending}
-            title="Mismo seed: mantiene el estilo y varía poco"
+            title="Mantiene el estilo de la imagen anterior y varía poco"
           >
-            <RefreshCw className="size-4" />
+            {/* Repeat, not RefreshCw: this repeats the same visual line rather
+                than regenerating freely, and two buttons side by side must not
+                carry the same icon. */}
+            <Repeat className="size-4" />
             Misma línea
           </Button>
         ) : null}
 
-        {backgroundUrl ? (
+        {pending ? (
+          <Button variant="ghost" onClick={() => abortRef.current?.abort()}>
+            <X className="size-4" />
+            Cancelar
+          </Button>
+        ) : null}
+
+        {backgroundUrl && !pending ? (
           <Button variant="ghost" onClick={clear} disabled={pending}>
             <X className="size-4" />
             Quitar
@@ -159,7 +190,9 @@ export function BackgroundPanel({
         ) : null}
       </div>
 
-      {last ? (
+      <Elapsed startedAt={startedAt} expected="suele tardar 10-20 s" />
+
+      {last && !pending ? (
         <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-border pt-3 font-mono text-[11px] text-muted-foreground">
           <span>{formatCostUsd(last.costUsd)}</span>
           <span>{(last.durationMs / 1000).toFixed(1)}s</span>

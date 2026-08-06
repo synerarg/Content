@@ -8,6 +8,7 @@ import { composeImagePrompt, IMAGE_PROMPT_VERSION } from "@/prompts/image-prompt
 import { artDirectionSchema } from "@/lib/schemas/brand";
 import { logGeneration } from "@/lib/ai/log-generation";
 import { estimateImageCostUsd } from "@/lib/ai/pricing";
+import { codeOf } from "@/lib/errors";
 import { FORMAT_KEYS, type FormatKey } from "@/templates/types";
 
 /*
@@ -193,7 +194,7 @@ export async function POST(request: Request) {
     if (rateLimited) {
       const retryAfterMs = (cause as RateLimitError).retryAfterMs;
       return NextResponse.json(
-        { error: message, rateLimited: true, retryAfterMs },
+        { error: message, code: "rate_limit", rateLimited: true, retryAfterMs },
         {
           status: 429,
           headers: { "Retry-After": String(Math.ceil(retryAfterMs / 1000)) },
@@ -201,6 +202,9 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: message, code: codeOf(cause) },
+      { status: 500 },
+    );
   }
 }

@@ -4,12 +4,14 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import {
   bumpSlideAttempts,
   markSlideFailed,
+  markSlidePending,
   markSlideQueued,
   markSlideRunning,
   resetStaleBackgrounds,
   setBatchStatus,
   setSlideBackground,
 } from "@/app/(app)/contenido/actions";
+import { isAbort } from "@/lib/errors";
 import type { FormatKey } from "@/templates/types";
 
 /*
@@ -95,6 +97,16 @@ export function useBackgroundQueue({
   // Refs, not state: the loop reads these on every iteration and must see the
   // current value, not the one captured when its closure was created.
   const cancelRef = useRef(false);
+  /*
+    The in-flight request, so pausing aborts it instead of waiting it out.
+
+    Honest about what this does and does not do: it stops the BROWSER waiting,
+    and stops the result being written. It does not cancel a generation the
+    provider has already started, so a paused slide may still have cost money.
+    There is no way to un-spend that from here — but there is a difference
+    between a user who waits 20 more seconds and one who does not.
+  */
+  const inFlightRef = useRef<AbortController | null>(null);
   const nextAllowedAtRef = useRef(0);
   const runningRef = useRef(false);
   /** Observed wall time per completed slide, used for the estimate. */
@@ -153,10 +165,13 @@ export function useBackgroundQueue({
         await markSlideRunning(item.slideId);
 
         let response: Response;
+        const controller = new AbortController();
+        inFlightRef.current = controller;
         try {
           response = await fetch("/api/generate/image", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            signal: controller.signal,
             body: JSON.stringify({
               brandId: item.brandId,
               brief: item.backgroundBrief,
@@ -164,7 +179,16 @@ export function useBackgroundQueue({
               templateSlug: item.templateSlug,
             }),
           });
-        } catch {
+        } catch (cause) {
+          // An abort is the user pausing. The slide goes back to pending — not
+          // failed — because nothing is wrong with it and it must be picked up
+          // unchanged when they resume.
+          if (isAbort(cause)) {
+            patch(item.slideId, { status: "pending", error: null });
+            await markSlidePending(item.slideId);
+            return "cancelled";
+          }
+
           // Network-level failure: no response at all. Almost always the tab
           // going offline, so it is worth one more go rather than a hard fail.
           attempts++;
@@ -180,6 +204,8 @@ export function useBackgroundQueue({
             return "failed";
           }
           continue;
+        } finally {
+          inFlightRef.current = null;
         }
 
         const payload = await response.json().catch(() => ({}));
@@ -311,6 +337,10 @@ export function useBackgroundQueue({
 
   const pause = useCallback(() => {
     cancelRef.current = true;
+    // Abort whatever is in flight rather than letting the loop finish the
+    // current slide first — a background generation runs 10-20s, and "Pausar"
+    // that takes 20 seconds to visibly do anything reads as broken.
+    inFlightRef.current?.abort();
   }, []);
 
   /**

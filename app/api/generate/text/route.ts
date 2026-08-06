@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireWorkspaceId } from "@/lib/workspace";
 import { generatePost, GENERATION_MODEL } from "@/lib/ai/generate-post";
 import { logGeneration } from "@/lib/ai/log-generation";
+import { codeOf } from "@/lib/errors";
 import { FORMAT_KEYS, type FormatKey } from "@/templates/types";
 
 /*
@@ -114,6 +115,9 @@ export async function POST(request: Request) {
       error: message,
     });
 
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: message, code: codeOf(cause) },
+      { status: 500 },
+    );
   }
 }

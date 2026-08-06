@@ -23,6 +23,8 @@ import {
   type BatchRecipe,
   type PostKind,
 } from "@/lib/batch/recipe";
+import { CodedError } from "@/lib/errors";
+import { parseWithRetry } from "./parse-with-retry";
 import { estimateCostUsd } from "./pricing";
 
 export const BATCH_MODEL = "claude-sonnet-5";
@@ -333,42 +335,48 @@ export async function generateBatch(input: {
 }): Promise<GenerateBatchResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    throw new Error("Falta ANTHROPIC_API_KEY. Agregala a .env.local.");
+    throw new CodedError("config", "Falta ANTHROPIC_API_KEY. Agregala a .env.local.");
   }
 
   const client = new Anthropic({ apiKey });
   const started = Date.now();
 
-  const response = await client.messages.parse({
-    model: BATCH_MODEL,
-    // A batch is several posts of copy plus adaptive thinking, so this needs far
-    // more headroom than the single-post call.
-    max_tokens: 16000,
-    system: [
-      {
-        type: "text",
-        text: buildBatchSystemPrompt(TEMPLATES),
-        cache_control: { type: "ephemeral" },
-      },
-    ],
-    messages: [{ role: "user", content: buildBatchUserPrompt(input) }],
-    output_config: { format: zodOutputFormat(batchSchema) },
-  });
+  const response = await parseWithRetry(() =>
+    client.messages.parse({
+      model: BATCH_MODEL,
+      // A batch is several posts of copy plus adaptive thinking, so this needs far
+      // more headroom than the single-post call.
+      max_tokens: 16000,
+      system: [
+        {
+          type: "text",
+          text: buildBatchSystemPrompt(TEMPLATES),
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+      messages: [{ role: "user", content: buildBatchUserPrompt(input) }],
+      output_config: { format: zodOutputFormat(batchSchema) },
+    }),
+  );
 
   const durationMs = Date.now() - started;
 
   if (response.stop_reason === "refusal") {
-    throw new Error("El modelo rechazó el pedido. Revisá el brief.");
+    throw new CodedError("safety", "El modelo rechazó el pedido. Revisá el brief.");
   }
   if (response.stop_reason === "max_tokens") {
-    throw new Error(
+    throw new CodedError(
+      "too_long",
       "La respuesta se cortó por límite de tokens. Probá con una composición más chica.",
     );
   }
 
   const parsed = response.parsed_output;
   if (!parsed) {
-    throw new Error("El modelo no devolvió un lote con el formato esperado.");
+    throw new CodedError(
+      "provider",
+      "El modelo no devolvió un lote con el formato esperado.",
+    );
   }
 
   const warnings: string[] = [];

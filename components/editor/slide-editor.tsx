@@ -18,8 +18,15 @@ import {
   rasterizeSlide,
   readPngDimensions,
 } from "@/lib/export/rasterize";
-import { TEMPLATES, emptySlots, getTemplate } from "@/templates/registry";
+import {
+  TEMPLATES,
+  emptySlots,
+  getTemplate,
+  isSlotRequired,
+  slotLabel,
+} from "@/templates/registry";
 import { FORMATS, FORMAT_KEYS, type FormatKey } from "@/templates/types";
+import { TemplatePicker } from "@/components/editor/template-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -191,22 +198,6 @@ export function SlideEditor({ brands }: { brands: EditorBrand[] }) {
           </div>
 
           <div className="space-y-2">
-            <Label>Plantilla</Label>
-            <Select value={templateSlug} onValueChange={handleTemplateChange}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {TEMPLATES.map((item) => (
-                  <SelectItem key={item.slug} value={item.slug}>
-                    {item.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
             <Label>Formato</Label>
             <Select
               value={format}
@@ -227,13 +218,36 @@ export function SlideEditor({ brands }: { brands: EditorBrand[] }) {
           </div>
         </div>
 
+        {/*
+          The picker needs the brand's real tokens to be worth anything, so it
+          only renders once they have resolved. Until then the description alone
+          keeps the layout from jumping.
+        */}
+        {brandTokens ? (
+          <div className="space-y-2">
+            <Label>Plantilla</Label>
+            <TemplatePicker
+              value={templateSlug}
+              format={format}
+              brand={brandTokens}
+              fontCss={fontCss}
+              onChange={handleTemplateChange}
+            />
+          </div>
+        ) : null}
+
         <p className="text-sm text-muted-foreground">{template.description}</p>
 
         <div className="space-y-4">
           {Object.keys(emptySlots(template)).map((key) => (
             <div key={key} className="space-y-2">
-              <Label htmlFor={`slot-${key}`} className="capitalize">
-                {key}
+              <Label htmlFor={`slot-${key}`}>
+                {slotLabel(template, key)}
+                {isSlotRequired(template, key) ? null : (
+                  <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                    opcional
+                  </span>
+                )}
               </Label>
               {LONG_SLOTS.has(key) ? (
                 <Textarea

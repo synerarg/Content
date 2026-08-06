@@ -10,7 +10,8 @@ import {
 } from "@/app/(app)/marcas/actions";
 import { splitPastedCaptions } from "@/lib/history";
 import type { HistoryAnalysis } from "@/lib/ai/analyze-history";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, formatRelative } from "@/lib/format";
+import { notifyError, readErrorPayload } from "@/lib/notify";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -85,15 +86,21 @@ export function HistoryPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ brandId }),
       });
-      const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Falló el análisis.");
+      if (!res.ok) {
+        notifyError(null, {
+          payload: await readErrorPayload(res),
+          retry: handleAnalyse,
+        });
+        return;
+      }
 
+      const payload = await res.json();
       toast.success(
         `${payload.analysis.angles.length} ángulos detectados sobre ${payload.captionCount} posts.`,
       );
       router.refresh();
     } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : "Falló el análisis.");
+      notifyError(cause, { retry: handleAnalyse });
     } finally {
       setAnalysing(false);
     }
@@ -253,7 +260,7 @@ export function HistoryPanel({
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {SOURCE_LABEL[post.source] ?? post.source} ·{" "}
-                    {formatDateTime(post.publishedAt ?? post.createdAt)}
+                    {formatRelative(post.publishedAt ?? post.createdAt)}
                   </p>
                 </div>
                 <Button

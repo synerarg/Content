@@ -4,9 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   Copy,
-  ImageIcon,
   Loader2,
   Package,
+  RefreshCw,
   Trash2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -39,9 +39,19 @@ import {
   type SlideQueueState,
 } from "@/lib/batch/use-background-queue";
 import { QueueProgress, SlideStatusChip } from "@/components/batch/queue-progress";
-import { getTemplate, emptySlots } from "@/templates/registry";
+import {
+  getTemplate,
+  emptySlots,
+  isSlideTextComplete,
+  isSlotRequired,
+  slotLabel,
+} from "@/templates/registry";
 import { FORMATS, type FormatKey } from "@/templates/types";
+import { notifyError } from "@/lib/notify";
+import { useAutosave } from "@/lib/use-autosave";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { SaveIndicator } from "@/components/ui/save-indicator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -94,6 +104,11 @@ export function BatchDetail({
   const [backgrounds, setBackgrounds] = useState<Record<string, string>>({});
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState("");
+  /** Determinate ZIP progress: slides rasterized so far, and the total. */
+  const [exportProgress, setExportProgress] = useState({ done: 0, total: 0 });
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const autosave = useAutosave();
 
   /*
     Which slides have their text fields revealed ON MOBILE.
@@ -240,6 +255,30 @@ export function BatchDetail({
     };
   }, []);
 
+  /*
+    Edits autosave 2s after you stop typing, and immediately on blur.
+
+    Previously they only saved on blur, so closing the tab or navigating away
+    mid-field silently discarded it — with nothing on screen to say whether
+    anything had been stored. The indicator next to the piece count is the
+    other half: it is what makes "did that save?" answerable without guessing.
+  */
+  const slotSaver = (slideId: string, slots: Record<string, string>) => async () => {
+    const result = await updateSlideSlots(slideId, slots);
+    if (!result.ok) notifyError(new Error(result.error));
+    return result.ok;
+  };
+
+  const postSaver = (postId: string, patch: Partial<BatchPost>) => async () => {
+    const result = await updatePost(postId, {
+      caption: patch.caption,
+      hashtags: patch.hashtags,
+      cta: patch.cta,
+    });
+    if (!result.ok) notifyError(new Error(result.error));
+    return result.ok;
+  };
+
   function patchSlide(slideId: string, slots: Record<string, string>) {
     setPosts((current) =>
       current.map((post) => ({
@@ -249,20 +288,15 @@ export function BatchDetail({
         ),
       })),
     );
+    autosave.schedule(`slide:${slideId}`, slotSaver(slideId, slots));
   }
 
-  async function saveSlots(slideId: string, slots: Record<string, string>) {
-    const result = await updateSlideSlots(slideId, slots);
-    if (!result.ok) toast.error(result.error);
-  }
-
-  async function savePost(postId: string, patch: Partial<BatchPost>) {
-    const result = await updatePost(postId, {
-      caption: patch.caption,
-      hashtags: patch.hashtags,
-      cta: patch.cta,
-    });
-    if (!result.ok) toast.error(result.error);
+  function patchPost(postId: string, patch: Partial<BatchPost>) {
+    setPosts((current) =>
+      current.map((post) => (post.id === postId ? { ...post, ...patch } : post)),
+    );
+    const next = { ...posts.find((p) => p.id === postId), ...patch } as BatchPost;
+    autosave.schedule(`post:${postId}`, postSaver(postId, next));
   }
 
   /*
@@ -301,6 +335,7 @@ export function BatchDetail({
     try {
       let done = 0;
       const total = posts.reduce((sum, post) => sum + post.slides.length, 0);
+      setExportProgress({ done: 0, total });
 
       for (const [postIndex, post] of posts.entries()) {
         const folder = `${batchSlug}/${String(postIndex + 1).padStart(2, "0")}-${post.type}`;
@@ -311,6 +346,7 @@ export function BatchDetail({
 
           done++;
           setProgress(`Renderizando ${done}/${total}…`);
+          setExportProgress({ done, total });
 
           const spec = FORMATS[slide.format];
           const blob = await rasterizeSlide({
@@ -356,31 +392,72 @@ export function BatchDetail({
         `ZIP listo: ${entries.filter((e) => "blob" in e).length} imágenes.`,
       );
     } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : "Falló la exportación.");
+      notifyError(cause, { retry: handleExportZip });
     } finally {
       setExporting(false);
       setProgress("");
+      setExportProgress({ done: 0, total: 0 });
     }
   }
 
   async function handleDelete() {
-    if (!window.confirm(`¿Eliminar el lote "${batchTitle}" con todas sus piezas?`)) {
-      return;
-    }
+    setDeleting(true);
     const result = await deleteBatch(batchId);
     if (!result.ok) {
+      setDeleting(false);
       toast.error(result.error);
       return;
     }
     toast.success("Lote eliminado.");
+    setConfirmDelete(false);
     router.push("/contenido");
     router.refresh();
   }
 
   const totalSlides = posts.reduce((sum, post) => sum + post.slides.length, 0);
 
+  /*
+    Why the export is gated.
+
+    Rasterizing a slide with no background, or with an empty required text
+    slot, does not fail — it produces a perfectly valid PNG with a hole in it.
+    That is exactly the kind of thing that reaches a client before anyone
+    notices, so the button says what is missing instead of letting it through.
+  */
+  const incomplete = allSlides.filter((slide) => {
+    const status = queue.states[slide.id]?.status ?? slide.backgroundStatus;
+    const hasBackground = status === "ready" || Boolean(backgrounds[slide.id]);
+    return !hasBackground || !isSlideTextComplete(slide.templateSlug, slide.slots);
+  });
+
+  const exportBlockedReason =
+    !ready
+      ? "Esperá a que terminen de cargar las tipografías."
+      : queue.running
+        ? "Esperá a que termine de generar los fondos."
+        : incomplete.length > 0
+          ? `${incomplete.length} placa${incomplete.length === 1 ? "" : "s"} sin fondo o con textos obligatorios vacíos.`
+          : null;
+
   return (
     <div className="space-y-8 px-6 py-8 md:px-8">
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title="Eliminar el lote"
+        description={
+          <>
+            Se elimina <span className="text-foreground">{batchTitle}</span> con
+            sus {posts.length} piezas y {totalSlides} placas, incluidos los
+            fondos ya generados. No se puede deshacer.
+          </>
+        }
+        confirmLabel={deleting ? "Eliminando…" : "Eliminar el lote"}
+        destructive
+        pending={deleting}
+        onConfirm={handleDelete}
+      />
+
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4">
         <div className="text-sm">
           <span className="font-medium">{posts.length} piezas</span>
@@ -391,16 +468,24 @@ export function BatchDetail({
               Cargando tipografías
             </span>
           ) : null}
+          <span className="ml-3">
+            <SaveIndicator status={autosave.status} />
+          </span>
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={handleDelete}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setConfirmDelete(true)}
+          >
             <Trash2 className="size-4" />
             Eliminar
           </Button>
           <Button
             onClick={handleExportZip}
-            disabled={exporting || !ready || queue.running}
+            disabled={exporting || exportBlockedReason !== null}
+            title={exportBlockedReason ?? "Descargar todas las placas y captions"}
           >
             {exporting ? (
               <Loader2 className="size-4 animate-spin" />
@@ -411,6 +496,37 @@ export function BatchDetail({
           </Button>
         </div>
       </div>
+
+      {/* The tooltip alone is not enough: a disabled button does not fire hover
+          on touch, and this is the one place a phone user gets stuck. */}
+      {exportBlockedReason && !exporting ? (
+        <p className="-mt-4 text-xs text-muted-foreground">
+          No se puede exportar todavía: {exportBlockedReason}
+        </p>
+      ) : null}
+
+      {exporting && exportProgress.total > 0 ? (
+        <div className="-mt-4 space-y-1.5">
+          <div
+            className="h-1 overflow-hidden rounded-full bg-muted"
+            role="progressbar"
+            aria-valuenow={exportProgress.done}
+            aria-valuemin={0}
+            aria-valuemax={exportProgress.total}
+            aria-label="Placas renderizadas"
+          >
+            <div
+              className="h-full rounded-full bg-[var(--synera-accent)] transition-[width] duration-300"
+              style={{
+                width: `${Math.round((exportProgress.done / exportProgress.total) * 100)}%`,
+              }}
+            />
+          </div>
+          <p className="text-xs tabular-nums text-muted-foreground">
+            {exportProgress.done}/{exportProgress.total} placas renderizadas
+          </p>
+        </div>
+      ) : null}
 
       <QueueProgress
         states={allSlides.map(
@@ -496,7 +612,7 @@ export function BatchDetail({
                         onClick={() => regenerateOne(slide)}
                         disabled={queue.running || busy}
                       >
-                        <ImageIcon className="size-4" />
+                        <RefreshCw className="size-4" />
                         {state.status === "ready" ? "Regenerar" : "Generar"}
                       </Button>
                     </div>
@@ -561,9 +677,14 @@ export function BatchDetail({
                         <div key={key} className="space-y-1.5">
                           <Label
                             htmlFor={`${slide.id}-${key}`}
-                            className="text-xs capitalize"
+                            className="text-xs"
                           >
-                            {key.replace(/_/g, " ")}
+                            {slotLabel(template, key)}
+                            {isSlotRequired(template, key) ? null : (
+                              <span className="ml-1.5 font-normal text-muted-foreground">
+                                opcional
+                              </span>
+                            )}
                           </Label>
                           {LONG_SLOTS.has(key) ? (
                             <Textarea
@@ -576,7 +697,7 @@ export function BatchDetail({
                                   [key]: event.target.value,
                                 })
                               }
-                              onBlur={() => saveSlots(slide.id, merged)}
+                              onBlur={() => autosave.flush(`slide:${slide.id}`, slotSaver(slide.id, merged))}
                             />
                           ) : (
                             <Input
@@ -588,7 +709,7 @@ export function BatchDetail({
                                   [key]: event.target.value,
                                 })
                               }
-                              onBlur={() => saveSlots(slide.id, merged)}
+                              onBlur={() => autosave.flush(`slide:${slide.id}`, slotSaver(slide.id, merged))}
                             />
                           )}
                         </div>
@@ -617,15 +738,11 @@ export function BatchDetail({
                   rows={5}
                   value={post.caption}
                   onChange={(event) =>
-                    setPosts((current) =>
-                      current.map((p) =>
-                        p.id === post.id
-                          ? { ...p, caption: event.target.value }
-                          : p,
-                      ),
-                    )
+                    patchPost(post.id, { caption: event.target.value })
                   }
-                  onBlur={() => savePost(post.id, post)}
+                  onBlur={() =>
+                    autosave.flush(`post:${post.id}`, postSaver(post.id, post))
+                  }
                 />
 
                 <div className="space-y-1.5">
@@ -636,21 +753,16 @@ export function BatchDetail({
                     id={`tags-${post.id}`}
                     value={post.hashtags.join(" ")}
                     onChange={(event) =>
-                      setPosts((current) =>
-                        current.map((p) =>
-                          p.id === post.id
-                            ? {
-                                ...p,
-                                hashtags: event.target.value
-                                  .split(/\s+/)
-                                  .map((t) => t.replace(/^#/, ""))
-                                  .filter(Boolean),
-                              }
-                            : p,
-                        ),
-                      )
+                      patchPost(post.id, {
+                        hashtags: event.target.value
+                          .split(/\s+/)
+                          .map((t) => t.replace(/^#/, ""))
+                          .filter(Boolean),
+                      })
                     }
-                    onBlur={() => savePost(post.id, post)}
+                    onBlur={() =>
+                      autosave.flush(`post:${post.id}`, postSaver(post.id, post))
+                    }
                   />
                 </div>
               </div>

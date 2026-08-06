@@ -139,6 +139,30 @@ export async function markSlideQueued(slideId: string): Promise<ActionResult> {
   return { ok: true };
 }
 
+/**
+ * Back to the start, with nothing wrong.
+ *
+ * Used when a run is cancelled mid-request: the slide is not failed and must
+ * not carry an error, it simply has not been generated yet.
+ */
+export async function markSlidePending(slideId: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("slides")
+    .update({
+      background_status: "pending",
+      background_error: null,
+      background_started_at: null,
+    })
+    .eq("id", slideId)
+    // Never walk a finished slide backwards: a cancel that races a completion
+    // would otherwise discard a background that was already written.
+    .neq("background_status", "ready");
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 export async function markSlideRunning(slideId: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase

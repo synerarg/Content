@@ -1,6 +1,6 @@
 import { CircleAlert, ImageIcon, Type } from "lucide-react";
 import { formatCostUsd } from "@/lib/ai/pricing";
-import { formatDateTime, formatDuration } from "@/lib/format";
+import { formatDuration, formatRelative } from "@/lib/format";
 
 export type RecentCall = {
   id: string;
@@ -56,7 +56,7 @@ export function RecentCalls({ calls }: { calls: RecentCall[] }) {
               <p className="mt-0.5 text-xs text-muted-foreground">
                 {[
                   call.brandName ?? "sin marca",
-                  formatDateTime(call.createdAt),
+                  formatRelative(call.createdAt),
                   formatDuration(call.durationMs),
                 ].join(" · ")}
               </p>

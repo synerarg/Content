@@ -7,6 +7,7 @@ import {
   HISTORY_MODEL,
 } from "@/lib/ai/analyze-history";
 import { logGeneration } from "@/lib/ai/log-generation";
+import { codeOf } from "@/lib/errors";
 
 /*
   Extracts the angles and hooks a brand has already used, and stores them on the
@@ -144,6 +145,9 @@ export async function POST(request: Request) {
       error: message,
     });
 
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: message, code: codeOf(cause) },
+      { status: 500 },
+    );
   }
 }

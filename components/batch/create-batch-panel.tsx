@@ -1,9 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Loader2, Minus, Plus, Sparkles } from "lucide-react";
+import { Loader2, Minus, Plus, Sparkles, TriangleAlert, X } from "lucide-react";
 import { toast } from "sonner";
+import { notifyError, readErrorPayload } from "@/lib/notify";
 import {
   CAROUSEL_SLIDE_RANGE,
   RECIPE_PRESETS,
@@ -16,6 +18,7 @@ import {
   type BatchRecipe,
   type PostKind,
 } from "@/lib/batch/recipe";
+import { describeGaps, type BrandReadiness } from "@/lib/brand-readiness";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -28,7 +31,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export type BrandOption = { id: string; name: string };
+export type BrandOption = {
+  id: string;
+  name: string;
+  readiness: BrandReadiness;
+};
 
 const CUSTOM = "custom";
 
@@ -98,6 +105,7 @@ export function CreateBatchPanel({ brands }: { brands: BrandOption[] }) {
     story: { count: 1, slides: 1 },
   });
   const [pending, setPending] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
 
   const recipe: BatchRecipe = useMemo(() => {
     if (presetId !== CUSTOM) {
@@ -120,6 +128,10 @@ export function CreateBatchPanel({ brands }: { brands: BrandOption[] }) {
   const posts = totalPosts(recipe);
   const slides = totalSlides(recipe);
 
+  const brand = brands.find((item) => item.id === brandId);
+  const readiness = brand?.readiness;
+  const brandBlocked = readiness ? !readiness.ready : false;
+
   async function handleGenerate() {
     if (brief.trim().length < 8) {
       toast.error("Contame un poco más sobre el lote.");
@@ -129,18 +141,32 @@ export function CreateBatchPanel({ brands }: { brands: BrandOption[] }) {
       toast.error(recipeError);
       return;
     }
+    if (brandBlocked) {
+      toast.error("Completá la marca antes de generar.");
+      return;
+    }
 
+    const controller = new AbortController();
+    abortRef.current = controller;
     setPending(true);
+
     try {
       const res = await fetch("/api/generate/batch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({ brandId, brief, recipe }),
       });
 
-      const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Falló la generación.");
+      if (!res.ok) {
+        notifyError(null, {
+          payload: await readErrorPayload(res),
+          retry: handleGenerate,
+        });
+        return;
+      }
 
+      const payload = await res.json();
       for (const warning of payload.warnings ?? []) {
         toast.warning(warning);
       }
@@ -150,8 +176,9 @@ export function CreateBatchPanel({ brands }: { brands: BrandOption[] }) {
       router.push(`/contenido/${payload.batchId}`);
       router.refresh();
     } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : "Falló la generación.");
+      notifyError(cause, { retry: handleGenerate });
     } finally {
+      abortRef.current = null;
       setPending(false);
     }
   }
@@ -177,6 +204,24 @@ export function CreateBatchPanel({ brands }: { brands: BrandOption[] }) {
             ))}
           </SelectContent>
         </Select>
+
+        {/*
+          Blocks the spend and says exactly what to go and fix, with a link that
+          lands on the brand. A generic "algo salió mal" after the call would
+          have cost the call.
+        */}
+        {readiness && !readiness.ready ? (
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-destructive/30 px-3 py-2 text-sm text-destructive">
+            <TriangleAlert className="size-4 shrink-0" />
+            {describeGaps(readiness.gaps)} de {brand?.name}.
+            <Link
+              href={`/marcas/${brandId}`}
+              className="underline underline-offset-4"
+            >
+              Completar la marca
+            </Link>
+          </p>
+        ) : null}
       </div>
 
       <div className="space-y-2">
@@ -286,17 +331,38 @@ export function CreateBatchPanel({ brands }: { brands: BrandOption[] }) {
         </p>
       </div>
 
-      <Button
-        onClick={handleGenerate}
-        disabled={pending || !brandId || Boolean(recipeError)}
-      >
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          onClick={handleGenerate}
+          disabled={pending || !brandId || Boolean(recipeError) || brandBlocked}
+          title={
+            brandBlocked
+              ? `${describeGaps(readiness?.gaps ?? [])} de esta marca.`
+              : undefined
+          }
+        >
+          {pending ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Sparkles className="size-4" />
+          )}
+          {pending ? "Escribiendo el lote…" : "Generar lote"}
+        </Button>
+
         {pending ? (
-          <Loader2 className="size-4 animate-spin" />
-        ) : (
-          <Sparkles className="size-4" />
-        )}
-        {pending ? "Escribiendo el lote…" : "Generar lote"}
-      </Button>
+          <Button variant="ghost" onClick={() => abortRef.current?.abort()}>
+            <X className="size-4" />
+            Cancelar
+          </Button>
+        ) : null}
+      </div>
+
+      {pending ? (
+        <p className="text-xs text-muted-foreground">
+          Claude escribe las {posts} piezas en una sola llamada. Suele tardar
+          entre 30 y 70 segundos.
+        </p>
+      ) : null}
     </div>
   );
 }

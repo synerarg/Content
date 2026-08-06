@@ -8,8 +8,10 @@ import type { z } from "zod";
  * after the fact.
  */
 export const FORMATS = {
-  feed: { label: "Feed 4:5", width: 1080, height: 1350, aspect: "4 / 5" },
-  story: { label: "Historia 9:16", width: 1080, height: 1920, aspect: "9 / 16" },
+  // Named by what they ARE, with the ratio secondary — an account manager
+  // thinks "post de feed", not "4:5".
+  feed: { label: "Post de feed (4:5)", width: 1080, height: 1350, aspect: "4 / 5" },
+  story: { label: "Historia (9:16)", width: 1080, height: 1920, aspect: "9 / 16" },
 } as const;
 
 export type FormatKey = keyof typeof FORMATS;

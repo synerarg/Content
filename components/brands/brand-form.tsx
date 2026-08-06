@@ -14,6 +14,7 @@ import { StringListInput } from "@/components/brands/string-list-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { HelpTip } from "@/components/ui/help-tip";
 import { Textarea } from "@/components/ui/textarea";
 
 function Section({
@@ -163,7 +164,14 @@ export function BrandForm({
         description="Lo que Claude usa para escribir el guion, el copy sobre la imagen y el caption."
       >
         <div className="space-y-2">
-          <Label htmlFor="tone_of_voice">Tono de voz</Label>
+          <Label htmlFor="tone_of_voice" className="flex items-center gap-1.5">
+            Tono de voz
+            <HelpTip>
+              Cómo habla la marca, no de qué habla. Ej.: “Directo y sin vueltas,
+              voseo rioplatense, admite cuando algo no se puede. Nunca usa
+              signos de exclamación ni promesas de resultados”.
+            </HelpTip>
+          </Label>
           <Textarea
             id="tone_of_voice"
             rows={4}
@@ -211,7 +219,14 @@ export function BrandForm({
         description="Alimenta el prompt de imagen. El modelo genera solo fondos: el texto lo pone el código."
       >
         <div className="space-y-2">
-          <Label htmlFor="photographic_style">Estilo fotográfico</Label>
+          <Label htmlFor="photographic_style" className="flex items-center gap-1.5">
+            Estilo fotográfico
+            <HelpTip>
+              La estética de los fondos, en términos de fotografía real. Ej.:
+              “Fotografía natural con luz cálida, paleta terrosa, grano suave,
+              sin renders 3D ni ilustración”.
+            </HelpTip>
+          </Label>
           <Textarea
             id="photographic_style"
             rows={3}
@@ -221,7 +236,13 @@ export function BrandForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="lighting">Iluminación</Label>
+          <Label htmlFor="lighting" className="flex items-center gap-1.5">
+            Iluminación
+            <HelpTip>
+              Define el clima de la imagen más que ninguna otra cosa. Ej.: “Luz
+              natural lateral de mañana, sombras largas y suaves”.
+            </HelpTip>
+          </Label>
           <Input
             id="lighting"
             {...register("art_direction.lighting")}

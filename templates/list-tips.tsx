@@ -4,8 +4,12 @@ import type { TemplateProps } from "./types";
 
 export const listTipsSlots = z.object({
   title: z.string().trim().min(1, "El título es obligatorio.").max(70),
-  item_1: z.string().trim().max(90),
-  item_2: z.string().trim().max(90),
+  // The first two points are required: a "lista de tips" with a heading and
+  // nothing under it is a broken card, and until now nothing said so — not the
+  // editor, not the export check, and not the schema Claude fills in. The third
+  // stays optional because two good points beat three padded ones.
+  item_1: z.string().trim().min(1, "El primer punto es obligatorio.").max(90),
+  item_2: z.string().trim().min(1, "El segundo punto es obligatorio.").max(90),
   item_3: z.string().trim().max(90),
 });
 
