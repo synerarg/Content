@@ -94,25 +94,47 @@ localhost, preview and production — so this is a one-time setup, not a
 per-environment one. What *does* change per environment is Supabase's redirect
 allow-list, in step 4.3.
 
-### 4.1 Google Cloud Console
+### 4.1 Google Cloud Console — consent screen first
+
+Google will not let you create a Web application client until the consent screen
+exists, so this comes first even though it feels like paperwork.
+
+1. **Google Auth Platform → Branding** (older consoles: APIs & Services → OAuth
+   consent screen). App name, user support email, developer contact email.
+2. **Audience**: *External* unless the account is on Google Workspace and only
+   staff will ever sign in — in which case *Internal* skips the next warning
+   entirely.
+3. Scopes: the defaults (`email`, `profile`, `openid`) are all this app asks
+   for. Do not add more; anything beyond these triggers Google verification.
+
+> **External + Testing only lets listed test users in.** A new External app
+> starts in *Testing*, where sign-in fails with "Access blocked: … has not
+> completed the Google verification process" for anyone not on the test-user
+> list. Either add every person who will sign in under **Audience → Test
+> users**, or press **Publish app** to move it to *Production* — which is fine
+> without verification while the app requests only the three basic scopes above.
+
+### 4.2 Google Cloud Console — the client
 
 1. APIs & Services → Credentials → Create credentials → **OAuth client ID**.
 2. Application type: **Web application**.
 3. Authorized redirect URI — exactly one, and this is the Supabase project's
-   callback:
+   callback, *not* the app's:
 
    ```
    https://dzxkxwuzfmoyktevfdfn.supabase.co/auth/v1/callback
    ```
 
+   Leave "Authorized JavaScript origins" empty; the browser never talks to
+   Google directly here.
 4. Copy the client ID and client secret.
 
-### 4.2 Supabase → Authentication → Providers → Google
+### 4.3 Supabase → Authentication → Providers → Google
 
 Enable it and paste the client ID and secret. Nothing else on that page needs
 changing.
 
-### 4.3 Supabase → Authentication → URL Configuration
+### 4.4 Supabase → Authentication → URL Configuration
 
 - **Site URL**: the production URL, e.g. `https://synera-content-studio.vercel.app`
 - **Redirect URLs** — one line each:
@@ -131,6 +153,22 @@ The app builds its own `redirectTo` from the hostname the browser is actually on
 (`components/auth/login-form.tsx`), and the callback rebuilds it from
 `x-forwarded-host` behind Vercel's proxy (`app/auth/callback/route.ts`) — which
 is why no environment variable holds the site URL.
+
+### 4.5 Check that Google did not create a *second* account
+
+Sign in with Google using an address that **already has an email + password
+account**, then confirm you land in the workspace that has your brands rather
+than an empty one.
+
+Supabase links a Google identity onto an existing user when the addresses match
+and both are verified. When they are not linked, a second `auth.users` row is
+created — and because `handle_new_user()` gives every new user its own
+workspace, that means a second, empty workspace. Nothing is lost, but it looks
+exactly like data loss: you sign in with Google and every brand is gone.
+
+If it happens, the fix is the "link identities with the same email" setting in
+Supabase Auth plus confirming the original account's email address — not
+recreating the brands.
 
 ---
 
