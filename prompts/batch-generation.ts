@@ -96,6 +96,15 @@ En un carrusel, todas las placas comparten la misma escena base para que se lean
 No menciones texto, carteles ni logos: eso ya se excluye por otro lado.`;
 }
 
+/** Keeps the history section bounded; the hook and angle live at the top. */
+const HISTORY_EXCERPT_CHARS = 220;
+
+export type UsedAngles = {
+  angles: Array<{ slug: string; gist: string; keywords: string[] }>;
+  hooks: string[];
+  phrases: string[];
+};
+
 export function buildBatchUserPrompt({
   brandName,
   toneOfVoice,
@@ -103,6 +112,8 @@ export function buildBatchUserPrompt({
   exampleCaptions,
   brief,
   recipe,
+  publishedHistory = [],
+  usedAngles,
 }: {
   brandName: string;
   toneOfVoice: string;
@@ -110,6 +121,23 @@ export function buildBatchUserPrompt({
   exampleCaptions: string[];
   brief: string;
   recipe: BatchRecipe;
+  /**
+   * Captions this brand has already published, newest first.
+   *
+   * Goes in the USER prompt, never the system prompt. The system prompt is
+   * identical for every brand and is cached — putting per-brand history there
+   * would fragment one shared cache entry into one per client and pay the write
+   * cost on every batch.
+   */
+  publishedHistory?: string[];
+  /**
+   * Angles and hooks already used, named by the history analysis step.
+   *
+   * Preferred over `publishedHistory`: raw captions were tested and the model
+   * repeated an angle that was in the list it had been handed. Naming the
+   * angles turns an inference into an instruction.
+   */
+  usedAngles?: UsedAngles;
 }): string {
   const sections: string[] = [`MARCA: ${brandName}`];
 
@@ -122,6 +150,74 @@ export function buildBatchUserPrompt({
       `CAPTIONS DE EJEMPLO DE LA MARCA (imitá el registro, no los copies)\n${captions
         .map((c, i) => `${i + 1}. ${c.trim()}`)
         .join("\n")}`,
+    );
+  }
+
+  /*
+    What the brand has already published.
+
+    Placed BEFORE the brief so the model reads the constraint before it reads
+    the task — asking it to avoid repetition after it has already formed an
+    angle tends to produce a rephrasing of that angle rather than a new one.
+  */
+  const history = publishedHistory
+    .map((caption) => caption.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+  /*
+    Named prohibitions come FIRST and are phrased as a hard constraint.
+
+    The earlier version pasted the captions here and asked the model not to
+    repeat them. It repeated one anyway — the angle it reused was sitting in
+    that very list. Asking a model to infer an abstraction and then avoid it,
+    while the brief pulls toward the same place, is two jobs; naming the angles
+    reduces it to one.
+  */
+  if (usedAngles && usedAngles.angles.length > 0) {
+    const lines = [
+      "ÁNGULOS PROHIBIDOS EN ESTE LOTE",
+      "Esta marca ya publicó estos argumentos. NINGUNA pieza puede volver a usarlos, ni reformulados:",
+      ...usedAngles.angles.map(
+        (angle) => `- ${angle.slug}: ${angle.gist}`,
+      ),
+    ];
+
+    if (usedAngles.hooks.length > 0) {
+      lines.push(
+        "",
+        "GANCHOS PROHIBIDOS (recursos de forma ya gastados)",
+        ...usedAngles.hooks.map((hook) => `- ${hook}`),
+      );
+    }
+
+    if (usedAngles.phrases.length > 0) {
+      lines.push(
+        "",
+        "FRASES YA USADAS — no las repitas literalmente:",
+        ...usedAngles.phrases.map((phrase) => `- "${phrase}"`),
+      );
+    }
+
+    lines.push(
+      "",
+      "Antes de escribir cada pieza, verificá que su argumento no sea ninguno de los prohibidos.",
+      "Si el brief te empuja hacia un ángulo prohibido, buscá otro: cambiá de objeción, de momento del problema, de protagonista o de tipo de prueba.",
+    );
+
+    sections.push(lines.join("\n"));
+  } else if (history.length > 0) {
+    // Fallback for when no analysis exists yet. Measurably weaker — see the
+    // note above — but better than nothing.
+    sections.push(
+      [
+        "CONTENIDO QUE ESTA MARCA YA PUBLICÓ (de más nuevo a más viejo)",
+        ...history.map(
+          (caption, i) =>
+            `${i + 1}. ${caption.slice(0, HISTORY_EXCERPT_CHARS)}${caption.length > HISTORY_EXCERPT_CHARS ? "…" : ""}`,
+        ),
+        "",
+        "Ninguna pieza de este lote puede repetir el ángulo, el gancho ni la estructura de las de arriba.",
+      ].join("\n"),
     );
   }
 

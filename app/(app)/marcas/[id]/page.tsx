@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
+import { History } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { BrandForm } from "@/components/brands/brand-form";
 import { brandRowToFormValues } from "@/lib/schemas/brand";
+import { Button } from "@/components/ui/button";
 
 /*
   Its own minimal query rather than a share of the page's.
@@ -57,6 +60,14 @@ export default async function EditarMarcaPage({
       <PageHeader
         title={brand.name}
         description="Los cambios se aplican al próximo contenido que generes con esta marca."
+        action={
+          <Button asChild variant="outline">
+            <Link href={`/marcas/${brand.id}/historial`}>
+              <History className="size-4" />
+              Historial publicado
+            </Link>
+          </Button>
+        }
       />
       <BrandForm
         mode="edit"

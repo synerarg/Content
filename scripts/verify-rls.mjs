@@ -20,6 +20,7 @@ const TENANT_TABLES = [
   "workspace_members",
   "brands",
   "brand_fonts",
+  "brand_published_posts",
   "generations",
   "content_batches",
   "posts",
@@ -77,7 +78,7 @@ for (const table of TENANT_TABLES) {
 
 console.log(
   failures === 0
-    ? `\nAll ${TENANT_TABLES.length} tenant tables deny anonymous reads.`
+    ? `\nAll ${TENANT_TABLES.length} tenant relations deny anonymous reads.`
     : `\n${failures} FAILURE(S) — do not ship.`,
 );
 process.exit(failures === 0 ? 0 : 1);

@@ -101,6 +101,8 @@ public by design and safe; everything else is not.
                                      ← the one line that matters, see §7  (Phase 6)
 20260805001000_background_queue.sql  background_status/error/attempts/started_at on
                                      slides — the background queue's state  (Phase 7)
+20260805001100_brand_history.sql     brand_published_posts + brands.content_analysis
+                                     — what the brand already published  (Phase 7)
 ```
 
 ### RLS design (applies to every table)
@@ -133,6 +135,9 @@ lib/render, lib/export    Brand tokens, font embedding, rasterizer, ZIP
 lib/format.ts             Locale/timezone-pinned display formatting  (Phase 6)
 lib/batch/recipe.ts       Batch composition: presets, schema, expansion  (Phase 7)
 lib/batch/use-background-queue.ts   The queue driver  (Phase 7)
+lib/ai/analyze-history.ts Extracts already-used angles from published posts  (Phase 7)
+app/api/analyze/history   Runs that extraction, stores it on the brand  (Phase 7)
+app/(app)/marcas/[id]/historial     Import published posts, run the analysis  (Phase 7)
 scripts/verify-rls.mjs    `npm run verify:rls`
 scripts/_stub-server-only.cjs       Lets probes import `server-only` modules
 ```
@@ -158,6 +163,35 @@ reload resume instead of restart and lets a failure keep its reason.
 The queue **has no configured delay**. It runs flat out and slows only when the API
 answers 429, honouring the delay the provider asked for. Free tier throttles itself to
 ~2/min; a paid tier never 429s and runs at full speed. Neither needs a setting.
+
+### Not repeating published content (Phase 7)
+
+**The generator repeats itself, and this was measured, not suspected.** Three consecutive
+batches on the same brief each produced a story titled *"Tu competencia ya tiene web"* —
+against a brand that had already published exactly that argument. One produced *"Un
+catálogo de fotos no cobra"* against a published caption reading *"no es un catálogo de
+fotos"*. It was copying content it had never been shown.
+
+**The obvious fix does not work.** Pasting the last N captions into the prompt with "do
+not repeat these" was tested first and **failed**: lexical overlap with the history went
+*up* (17% → 18.6%), and the batch reused an angle that was sitting in the list it had been
+handed. Asking a model to abstract an angle out of each caption AND then avoid that
+abstraction is two jobs, and the brief pulls hard against both.
+
+**What works is two steps.** `analyzePublishedHistory()` extracts NAMED angles, hooks and
+phrases (`presion-competencia: tu competencia ya avanzó y vos te quedás atrás`), and the
+batch prompt forbids them by name. Same brief, same brand: the run without prohibitions
+produced "Tu competencia ya tiene web" for the third time; the run with them did not, and
+found two angles absent from the history entirely (platform risk, pricing power).
+
+The extraction runs **once per history change, not per batch** — US$0.027, stored on the
+brand — so batches carry a few hundred tokens of prohibitions and nothing else changes.
+
+**The measurement caveat, so nobody repeats the mistake:** the automated keyword-collision
+metric reported 0/7 for both runs and was useless — it required literal matches of long
+phrases that would never reappear verbatim. The evidence that counted was a targeted check
+for the specific angle that had leaked, plus reading the headlines. **A real check needs
+semantic similarity, not keywords.**
 
 **`/configuracion`** reads `generation_usage_daily` (pre-aggregated in SQL, not in JS —
 `generations` grows forever) plus the last 20 raw rows. It reports integration status as
@@ -189,6 +223,9 @@ template automatically teaches the prompts its slot names and character limits.
 | Recipe module, 17 assertions | PASS — presets, expansion order, and every invalid composition rejected |
 | `reconcileWithRecipe`, 20 assertions | PASS — incl. out-of-order input reordered rather than relabelled, padding, truncation, shortfall and extras |
 | Batch generation against the recipe, **live** | PASS — asked for 1 carousel of 4 + 1 feed + 3 stories, got exactly that; correct cover/body roles; formats derived from type; 0 warnings; no text/logo leakage into any scene; 53.8s, US$0.0575 |
+| Two-step angle prohibition, **live A/B** | PASS — without prohibitions the batch produced "Tu competencia ya tiene web" (3rd consecutive run); with them it did not, and found two angles absent from the history |
+| Raw-captions-in-prompt approach, **live A/B** | **FAIL, and it is why the two-step exists** — overlap rose 17%→18.6% and it reused an angle from the list it was given |
+| `content_analysis` round-trip and degradation | PASS — unanalysed `{}`, null, and an older shape all degrade to "no prohibitions" instead of throwing; extra fields still parse |
 
 **NOT verified — the important gap:**
 
@@ -413,6 +450,31 @@ each**. It is now 1 click for the copy, 1 to start the queue, and 1 for the ZIP.
 Auto-starting the queue on batch creation was considered and **deliberately rejected** by
 the account owner: reviewing the copy before spending four minutes of generation avoids
 regenerating backgrounds for text that is about to change.
+
+### Where published content comes from
+
+Today: **pasted in by hand** at `/marcas/[id]/historial`. The table carries `source` and
+`external_id` with a partial unique index precisely so a future sync updates in place
+instead of duplicating the whole history.
+
+**The Meta MCP is not a path for the app.** MCP authenticates in the Claude session, not
+in a Next.js deployment — there is no MCP client on Vercel and no credentials to give it.
+Separately, the Instagram tools in Meta's Ads MCP (`ads_get_ig_accounts`,
+`ads_get_ig_media`) return *"This tool is new and is being gradually rolled out"* for every
+ad account tried, so they are unavailable even from a session.
+
+What DOES work from a session, and produced the eight real captions the experiments ran
+on: `ads_get_creatives` with `creative_ids` returns the full `body` of each ad creative
+plus its `effective_instagram_media_id`. **Boosted posts only** — organic posts that were
+never promoted do not appear.
+
+For the app itself the route is the **Instagram Graph API**. Business/Creator account
+linked to a Facebook Page, `instagram_basic` + `instagram_manage_insights`, long-lived
+tokens that expire every 60 days. App Review is only needed for third parties to
+self-connect; for accounts already in the agency's Business Manager a **System User token**
+avoids it entirely. Note this would put per-tenant secrets in the database for the first
+time — currently the app stores none, and `SUPABASE_SERVICE_ROLE_KEY` is deliberately
+empty.
 
 **Known limitation, worth not rediscovering:** carousel slides do not share a seed, so a
 carousel's four backgrounds are four unrelated photos. The `slides.generation_params`

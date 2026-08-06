@@ -14,6 +14,7 @@ import {
   BATCH_PROMPT_VERSION,
   buildBatchSystemPrompt,
   buildBatchUserPrompt,
+  type UsedAngles,
 } from "@/prompts/batch-generation";
 import {
   expandRecipe,
@@ -325,6 +326,10 @@ export async function generateBatch(input: {
   exampleCaptions: string[];
   brief: string;
   recipe: BatchRecipe;
+  /** Captions already published by this brand, newest first. */
+  publishedHistory?: string[];
+  /** Named angles/hooks to forbid, from analyzePublishedHistory(). */
+  usedAngles?: UsedAngles;
 }): Promise<GenerateBatchResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {

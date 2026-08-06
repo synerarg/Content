@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireWorkspaceId } from "@/lib/workspace";
 import { generateBatch, BATCH_MODEL } from "@/lib/ai/generate-batch";
 import { logGeneration } from "@/lib/ai/log-generation";
+import { historyAnalysisSchema } from "@/lib/ai/analyze-history";
 import {
   describeRecipe,
   recipeSchema,
@@ -53,7 +54,9 @@ export async function POST(request: Request) {
 
   const { data: brand, error: brandError } = await supabase
     .from("brands")
-    .select("id, name, tone_of_voice, target_audience, example_captions")
+    .select(
+      "id, name, tone_of_voice, target_audience, example_captions, content_analysis",
+    )
     .eq("id", brandId)
     .maybeSingle();
 
@@ -64,6 +67,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No se encontró la marca." }, { status: 404 });
   }
 
+  /*
+    Angles this brand has already used, forbidden by name in the prompt.
+
+    Validated rather than cast: the column holds model output written by
+    whatever version of the extraction prompt was current at the time, and a
+    shape change must degrade to "no prohibitions" instead of throwing mid-batch.
+    An unanalysed brand has `{}` here, which fails the parse and is treated the
+    same way — undefined, so no section is emitted at all.
+  */
+  const analysis = historyAnalysisSchema.safeParse(brand.content_analysis);
+  const usedAngles =
+    analysis.success && analysis.data.angles.length > 0 ? analysis.data : undefined;
+
   try {
     const result = await generateBatch({
       brandName: brand.name,
@@ -72,6 +88,7 @@ export async function POST(request: Request) {
       exampleCaptions: brand.example_captions ?? [],
       brief,
       recipe,
+      usedAngles,
     });
 
     const { data: batch, error: batchError } = await supabase
@@ -149,6 +166,9 @@ export async function POST(request: Request) {
         recipe,
         recipeLabel: describeRecipe(recipe),
         promptVersion: result.promptVersion,
+        // Recorded so a batch that repeats itself can be traced to whether it
+        // was generated with prohibitions at all, and which ones.
+        forbiddenAngles: usedAngles?.angles.map((angle) => angle.slug) ?? [],
       },
       output: {
         batchId: batch.id,

@@ -90,9 +90,62 @@ export type Database = {
           },
         ]
       }
+      brand_published_posts: {
+        Row: {
+          brand_id: string
+          caption: string
+          created_at: string
+          external_id: string | null
+          id: string
+          permalink: string | null
+          published_at: string | null
+          source: Database["public"]["Enums"]["published_post_source"]
+          workspace_id: string
+        }
+        Insert: {
+          brand_id: string
+          caption: string
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          permalink?: string | null
+          published_at?: string | null
+          source?: Database["public"]["Enums"]["published_post_source"]
+          workspace_id: string
+        }
+        Update: {
+          brand_id?: string
+          caption?: string
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          permalink?: string | null
+          published_at?: string | null
+          source?: Database["public"]["Enums"]["published_post_source"]
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_published_posts_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brand_published_posts_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       brands: {
         Row: {
           art_direction: Json
+          content_analysis: Json
+          content_analysis_at: string | null
           created_at: string
           example_captions: string[]
           id: string
@@ -108,6 +161,8 @@ export type Database = {
         }
         Insert: {
           art_direction?: Json
+          content_analysis?: Json
+          content_analysis_at?: string | null
           created_at?: string
           example_captions?: string[]
           id?: string
@@ -123,6 +178,8 @@ export type Database = {
         }
         Update: {
           art_direction?: Json
+          content_analysis?: Json
+          content_analysis_at?: string | null
           created_at?: string
           example_captions?: string[]
           id?: string
@@ -490,6 +547,7 @@ export type Database = {
       font_source: "google" | "upload"
       generation_kind: "text" | "image"
       post_type: "feed" | "story" | "carousel"
+      published_post_source: "manual" | "instagram" | "meta_ads"
       workspace_role: "owner" | "member"
     }
     CompositeTypes: {
@@ -626,6 +684,7 @@ export const Constants = {
       font_source: ["google", "upload"],
       generation_kind: ["text", "image"],
       post_type: ["feed", "story", "carousel"],
+      published_post_source: ["manual", "instagram", "meta_ads"],
       workspace_role: ["owner", "member"],
     },
   },
