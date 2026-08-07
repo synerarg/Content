@@ -35,7 +35,22 @@ export default async function AppLayout({
 
   return (
     <div className="flex min-h-svh">
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-sidebar md:flex">
+      {/*
+        Sticky, and the height is what makes it so.
+
+        The aside is a flex child of a `min-h-svh` row, so it stretched to the
+        height of the WHOLE document: nav pinned to the top of the page, account
+        menu to the bottom, and everything in between an empty column. Scroll
+        past the fold on a long form — which is every brand form — and the
+        navigation was simply gone.
+
+        `h-svh` gives it a definite height that beats the stretch, and `sticky`
+        holds that box against the viewport while the document scrolls under it.
+        Deliberately NOT a nested scroll container: `overflow` on the main
+        column would break the form's own `sticky bottom-0` action bar and lose
+        the browser's scroll restoration.
+      */}
+      <aside className="sticky top-0 hidden h-svh w-64 shrink-0 flex-col border-r border-border bg-sidebar md:flex">
         <div className="flex items-center gap-2 px-6 py-5">
           <span
             aria-hidden
@@ -44,7 +59,9 @@ export default async function AppLayout({
           <span className="text-sm font-semibold tracking-tight">Synera</span>
         </div>
 
-        <div className="flex-1 py-2">
+        {/* Scrolls on its own only if the nav ever outgrows a short viewport;
+            the account menu below it must stay reachable either way. */}
+        <div className="min-h-0 flex-1 overflow-y-auto py-2">
           <SidebarNav />
         </div>
 

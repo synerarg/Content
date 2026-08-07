@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { HelpTip } from "@/components/ui/help-tip";
-import { Textarea } from "@/components/ui/textarea";
+import { SuggestInput, SuggestTextarea } from "@/components/ui/suggest-field";
 
 function Section({
   title,
@@ -29,7 +29,16 @@ function Section({
 }) {
   return (
     <section className="grid gap-6 border-b border-border py-8 md:grid-cols-[240px_1fr]">
-      <div className="space-y-1">
+      {/*
+        The label follows its own section down.
+
+        `self-start` is what makes `sticky` possible at all: a grid item
+        stretches to the row height by default, and an element with no room to
+        move inside its track never sticks. With it, "Dirección de arte" stays
+        beside the field being edited instead of scrolling off at the top of a
+        section that is six fields long.
+      */}
+      <div className="space-y-1 md:sticky md:top-6 md:self-start">
         <h2 className="text-sm font-semibold">{title}</h2>
         <p className="text-xs text-muted-foreground">{description}</p>
       </div>
@@ -124,6 +133,12 @@ export function BrandForm({
         title="Identidad"
         description="Cómo se llama la marca y su logo."
       >
+        {/*
+          The name deliberately does NOT offer its placeholder. "Synera" is this
+          agency's own name, and a Tab that fills a client's brand with it is a
+          mistake someone would ship. Every other placeholder on this form is an
+          example of the KIND of answer wanted, which is a different thing.
+        */}
         <div className="space-y-2">
           <Label htmlFor="name">Nombre</Label>
           <Input id="name" {...register("name")} placeholder="Synera" />
@@ -132,7 +147,7 @@ export function BrandForm({
 
         <div className="space-y-2">
           <Label htmlFor="tagline">Tagline</Label>
-          <Input
+          <SuggestInput
             id="tagline"
             {...register("tagline")}
             placeholder="Automatización para pymes"
@@ -195,7 +210,7 @@ export function BrandForm({
               signos de exclamación ni promesas de resultados”.
             </HelpTip>
           </Label>
-          <Textarea
+          <SuggestTextarea
             id="tone_of_voice"
             rows={4}
             {...register("tone_of_voice")}
@@ -206,7 +221,7 @@ export function BrandForm({
 
         <div className="space-y-2">
           <Label htmlFor="target_audience">Audiencia</Label>
-          <Textarea
+          <SuggestTextarea
             id="target_audience"
             rows={3}
             {...register("target_audience")}
@@ -250,7 +265,7 @@ export function BrandForm({
               sin renders 3D ni ilustración”.
             </HelpTip>
           </Label>
-          <Textarea
+          <SuggestTextarea
             id="photographic_style"
             rows={3}
             {...register("art_direction.photographic_style")}
@@ -266,7 +281,7 @@ export function BrandForm({
               natural lateral de mañana, sombras largas y suaves”.
             </HelpTip>
           </Label>
-          <Input
+          <SuggestInput
             id="lighting"
             {...register("art_direction.lighting")}
             placeholder="Luz natural lateral, sombras suaves, hora dorada"
@@ -275,7 +290,7 @@ export function BrandForm({
 
         <div className="space-y-2">
           <Label htmlFor="palette_notes">Notas de color</Label>
-          <Input
+          <SuggestInput
             id="palette_notes"
             {...register("art_direction.palette_notes")}
             placeholder="Tonos fríos, acentos cian, evitar saturación alta"
@@ -298,6 +313,7 @@ export function BrandForm({
                 addLabel="Agregar restricción"
                 placeholder="stock photo genérico"
                 max={30}
+                suggest
               />
             )}
           />

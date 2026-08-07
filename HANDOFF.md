@@ -277,6 +277,8 @@ template automatically teaches the prompts its slot names and character limits.
 | Duplicate threshold calibration (`npm run probe:embeddings`) | **PASS at 0.82** — duplicado 0.8234-0.8682, mismo tema 0.7296-0.8129, no relacionado 0.7106-0.7787. The 0.0105 margin is the feature's honest limit |
 | Scene reference, **live A/B** (`npm run probe:scene-ab`) | **PASS** — handed a photo of a dark olive bottle, the scene came back EMPTY and visibly matched its hard side light. Costs ~400 input tokens |
 | Scene reference does not tint the set | **PASS after a fix the probe forced** — prompt `.3` returned a kitchen painted the bottle's own olive green. `.4` takes the light and refuses the colour; same reference, green gone |
+| Tab completion, **measured in the browser** | **PASS, 2026-08-07** — empty field + Tab fills it and keeps focus; second Tab leaves; Shift+Tab never completes; the value SURVIVES a react-hook-form re-render, which is what proves the native-setter write reached React. Ghost overlay: box delta 0px on all four sides, identical font/line-height/padding, and it re-wraps with the field at 261px wide |
+| Sticky shell and section labels, **measured** | **PASS** — at `scrollY 1565` the aside sits at `top: 0` with the nav visible, and the section label in play sits at `top: 24` (its `top-6`). Before, the aside stretched to document height and left an empty column |
 
 **The PNG export — CLOSED, 2026-08-06.**
 
@@ -985,6 +987,54 @@ description, because a 403 and a 404 ask for different things.
 
 Some sites (despegar.com.ar) refuse a Chrome User-Agent too. Those are reported,
 not worked around.
+
+### Tab turns a placeholder into a value
+
+`components/ui/suggest-field.tsx`. The placeholders on the brand form are
+answers, not hints — someone wrote a good tone of voice into `placeholder` and
+then everyone who agreed with it retyped it by hand. `SuggestInput` /
+`SuggestTextarea` accept it with Tab, and complete a partial value the same way
+when what is typed is a prefix.
+
+Three rules keep Tab trustworthy, and they are the whole design:
+
+1. **Tab is only intercepted when there is something to accept.** Otherwise it
+   moves focus. A field that swallowed Tab unconditionally would trap a
+   keyboard user, so the interception is conditional on the offer existing.
+2. **Accepting keeps focus, caret at the end** — the text is a starting point.
+   The second Tab leaves, because a full value has nothing left to accept, so
+   tab-tab still walks the form.
+3. **Opt-in per field.** `name` deliberately does NOT offer "Synera" (this
+   agency's own name, on a client's brand), the import URL does not offer
+   `olivaresdelsur.com.ar` (a domain that does not exist), and
+   `StringListInput` takes a `suggest` prop because its placeholder is as often
+   an instruction as an example.
+
+The write goes through `HTMLInputElement.prototype`'s own value setter followed
+by a bubbling `input` event. A plain `el.value = x` is invisible to React — it
+compares against the last value it wrote and skips the change — so the form
+would keep the old value while the DOM showed the new one. Verified by Tabbing
+into a *controlled* field and forcing a re-render: the value survived.
+
+The partial case needs an overlay because HTML hides the placeholder the moment
+a field is non-empty. The empty case needs none — the browser is already drawing
+it.
+
+### The shell stays put
+
+The desktop `<aside>` is a flex child of a `min-h-svh` row, so it stretched to
+the height of the whole document: nav pinned to the top of the *page*, and an
+empty column from there down. Scrolling past the fold on a brand form — which is
+every brand form — lost the navigation entirely. `sticky top-0 h-svh` gives it a
+definite height that beats the stretch and holds it against the viewport.
+
+Deliberately NOT a nested scroll container: `overflow` on the main column would
+break the form's own `sticky bottom-0` action bar and lose scroll restoration.
+
+The form's section labels use the same idea with `md:sticky md:top-6
+md:self-start`. `self-start` is what makes it work at all — a grid item stretches
+to the row height by default, and an element with no room to move inside its
+track never sticks.
 
 ### Search over everything written
 
