@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Copy, Download, Loader2, Package } from "lucide-react";
+import { Copy, Download, Loader2, Package, Shuffle } from "lucide-react";
 import { toast } from "sonner";
 import { OffscreenSlide, SlidePreview } from "@/components/render/slide-canvas";
 import {
@@ -10,6 +10,11 @@ import {
   type GenerationResponse,
 } from "@/components/editor/generate-panel";
 import { BackgroundPanel } from "@/components/editor/background-panel";
+import {
+  VariantsDialog,
+  type CaptionVariant,
+  type VariantsRequest,
+} from "@/components/editor/variants-dialog";
 import {
   useRenderAssets,
   type EditorBrand,
@@ -59,6 +64,12 @@ export function SlideEditor({ brands }: { brands: EditorBrand[] }) {
   const [backgroundUrl, setBackgroundUrl] = useState<string | null>(null);
   const [productId, setProductId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  // One dialog for the screen; only the request it carries changes.
+  const [variantsFor, setVariantsFor] = useState<{
+    request: VariantsRequest;
+    onApplySlots?: (slots: Record<string, string>) => void;
+    onApplyCaption?: (variant: CaptionVariant) => void;
+  } | null>(null);
 
   const exportRef = useRef<HTMLDivElement>(null);
 
@@ -340,6 +351,39 @@ export function SlideEditor({ brands }: { brands: EditorBrand[] }) {
           </div>
         ) : null}
 
+        <div className="flex items-center justify-between gap-3 border-t border-border pt-6">
+          <span className="text-xs uppercase tracking-wider text-muted-foreground">
+            Textos de la placa
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!brand}
+            onClick={() => {
+              if (!brand) return;
+              setVariantsFor({
+                request: {
+                  target: "slots",
+                  brandId: brand.id,
+                  templateSlug: template.slug,
+                  format,
+                  current: slots,
+                  // The brief doubles as the scene here: it is what the
+                  // background panel generates from.
+                  sceneBrief: brief || undefined,
+                },
+                onApplySlots: (next) => {
+                  setSlotValues(next);
+                  toast.success("Texto reemplazado.");
+                },
+              });
+            }}
+          >
+            <Shuffle className="size-4" />
+            Variantes
+          </Button>
+        </div>
+
         <div className="space-y-4">
           {Object.keys(emptySlots(template)).map((key) => (
             <div key={key} className="space-y-2">
@@ -385,16 +429,52 @@ export function SlideEditor({ brands }: { brands: EditorBrand[] }) {
         <div className="space-y-4 border-t border-border pt-6">
           <div className="flex items-center justify-between gap-3">
             <Label htmlFor="caption">Caption</Label>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={copyCaption}
-              disabled={!caption && !hashtags}
-            >
-              <Copy className="size-4" />
-              Copiar
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={!brand}
+                onClick={() => {
+                  if (!brand) return;
+                  setVariantsFor({
+                    request: {
+                      target: "caption",
+                      brandId: brand.id,
+                      // The single-piece editor has no post type; a standalone
+                      // slide is a feed post unless its format says otherwise.
+                      postType: format === "story" ? "story" : "feed",
+                      current: {
+                        caption,
+                        hashtags: hashtags.split(/\s+/).filter(Boolean),
+                        cta: slots.cta ?? "",
+                      },
+                      slideText: Object.values(slots)
+                        .filter((value) => value.trim())
+                        .join(" · "),
+                    },
+                    onApplyCaption: (variant) => {
+                      setCaption(variant.caption);
+                      setHashtags(variant.hashtags.join(" "));
+                      toast.success("Caption reemplazado.");
+                    },
+                  });
+                }}
+              >
+                <Shuffle className="size-4" />
+                Variantes
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={copyCaption}
+                disabled={!caption && !hashtags}
+              >
+                <Copy className="size-4" />
+                Copiar
+              </Button>
+            </div>
           </div>
           <Textarea
             id="caption"
@@ -484,6 +564,18 @@ export function SlideEditor({ brands }: { brands: EditorBrand[] }) {
           </>
         ) : null}
       </div>
+
+      {variantsFor ? (
+        <VariantsDialog
+          open
+          onOpenChange={(next) => {
+            if (!next) setVariantsFor(null);
+          }}
+          request={variantsFor.request}
+          onApplySlots={variantsFor.onApplySlots}
+          onApplyCaption={variantsFor.onApplyCaption}
+        />
+      ) : null}
     </div>
   );
 }

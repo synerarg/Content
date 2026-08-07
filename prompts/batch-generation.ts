@@ -1,4 +1,5 @@
 import type { AnyTemplateDefinition } from "@/templates/registry";
+import { maxLengthOf } from "@/lib/ai/slot-limits";
 import { FORMATS } from "@/templates/types";
 import {
   describeRecipe,
@@ -21,29 +22,9 @@ import {
  */
 export const BATCH_PROMPT_VERSION = "2026-08-07.1";
 
-function slotLimit(template: AnyTemplateDefinition, key: string): number | null {
-  const field = template.slots.shape[key];
-  const checks =
-    (field as unknown as {
-      _zod?: {
-        def?: {
-          checks?: Array<{ _zod?: { def?: { check?: string; maximum?: number } } }>;
-        };
-      };
-    })?._zod?.def?.checks ?? [];
-
-  for (const check of checks) {
-    const def = check?._zod?.def;
-    if (def?.check === "max_length" && typeof def.maximum === "number") {
-      return def.maximum;
-    }
-  }
-  return null;
-}
-
 function describeTemplate(template: AnyTemplateDefinition): string {
   const slots = Object.keys(template.slots.shape).map((key) => {
-    const limit = slotLimit(template, key);
+    const limit = maxLengthOf(template, key);
     return `    - ${key}${limit ? ` (máx ${limit} car.)` : ""}: ${
       template.slotHints[key] ?? ""
     }`;

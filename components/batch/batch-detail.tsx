@@ -8,6 +8,7 @@ import {
   Loader2,
   Package,
   RefreshCw,
+  Shuffle,
   Trash2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -40,6 +41,11 @@ import {
   updateSlideSlots,
 } from "@/app/(app)/contenido/actions";
 import { SchedulePanel } from "@/components/batch/schedule-panel";
+import {
+  VariantsDialog,
+  type CaptionVariant,
+  type VariantsRequest,
+} from "@/components/editor/variants-dialog";
 import {
   DEFAULT_TIME,
   exportPrefix,
@@ -153,6 +159,20 @@ export function BatchDetail({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const autosave = useAutosave();
+
+  /*
+    One dialog for the whole page, not one per slide.
+
+    A batch of eight slides plus their captions would otherwise mount sixteen
+    dialogs, each with its own abort controller and its own fetch state, so that
+    fifteen of them can be closed. What varies is the request; the dialog is the
+    same component either way.
+  */
+  const [variantsFor, setVariantsFor] = useState<{
+    request: VariantsRequest;
+    onApplySlots?: (slots: Record<string, string>) => void;
+    onApplyCaption?: (variant: CaptionVariant) => void;
+  } | null>(null);
 
   /*
     Which slides have their text fields revealed ON MOBILE.
@@ -1044,6 +1064,34 @@ export function BatchDetail({
                         Placa {slideIndex + 1} · {template.name} ·{" "}
                         {FORMATS[slide.format].label}
                       </p>
+
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          setVariantsFor({
+                            request: {
+                              target: "slots",
+                              brandId: brand.id,
+                              templateSlug: slide.templateSlug,
+                              format: slide.format,
+                              current: merged,
+                              // The background is already generated and is not
+                              // regenerated for a copy change, so the options
+                              // have to work over the photo that exists.
+                              sceneBrief: slide.backgroundBrief || undefined,
+                            },
+                            onApplySlots: (slots) => {
+                              patchSlide(slide.id, slots);
+                              toast.success("Texto reemplazado.");
+                            },
+                          })
+                        }
+                      >
+                        <Shuffle className="size-4" />
+                        Variantes
+                      </Button>
+
                       <Button
                         variant="ghost"
                         size="sm"
@@ -1120,14 +1168,51 @@ export function BatchDetail({
                   <Label htmlFor={`caption-${post.id}`} className="text-xs">
                     Caption
                   </Label>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => copyCaption(post)}
-                  >
-                    <Copy className="size-4" />
-                    Copiar
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        setVariantsFor({
+                          request: {
+                            target: "caption",
+                            brandId: brand.id,
+                            postType: post.type,
+                            current: {
+                              caption: post.caption,
+                              hashtags: post.hashtags,
+                              cta: post.cta,
+                            },
+                            // What the images already say, so the caption
+                            // accompanies them instead of repeating them.
+                            slideText: post.slides
+                              .flatMap((slide) => Object.values(slide.slots))
+                              .filter((value) => value.trim())
+                              .join(" · "),
+                          },
+                          onApplyCaption: (variant) => {
+                            patchPost(post.id, {
+                              caption: variant.caption,
+                              hashtags: variant.hashtags,
+                              cta: variant.cta,
+                            });
+                            toast.success("Caption reemplazado.");
+                          },
+                        })
+                      }
+                    >
+                      <Shuffle className="size-4" />
+                      Variantes
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => copyCaption(post)}
+                    >
+                      <Copy className="size-4" />
+                      Copiar
+                    </Button>
+                  </div>
                 </div>
                 <Textarea
                   id={`caption-${post.id}`}
@@ -1196,6 +1281,18 @@ export function BatchDetail({
             }),
           )
         : null}
+
+      {variantsFor ? (
+        <VariantsDialog
+          open
+          onOpenChange={(next) => {
+            if (!next) setVariantsFor(null);
+          }}
+          request={variantsFor.request}
+          onApplySlots={variantsFor.onApplySlots}
+          onApplyCaption={variantsFor.onApplyCaption}
+        />
+      ) : null}
     </div>
   );
 }

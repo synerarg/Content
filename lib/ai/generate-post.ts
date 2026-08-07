@@ -16,6 +16,7 @@ import {
 } from "@/prompts/post-generation";
 import { CodedError } from "@/lib/errors";
 import { parseWithRetry } from "./parse-with-retry";
+import { trimToLimits } from "./slot-limits";
 import { estimateCostUsd } from "./pricing";
 
 export const GENERATION_MODEL = "claude-sonnet-5";
@@ -101,50 +102,6 @@ export type GeneratePostResult = {
   durationMs: number;
   promptVersion: string;
 };
-
-/** Read a slot's declared max length so overflow can be trimmed sensibly. */
-function maxLengthOf(template: AnyTemplateDefinition, key: string): number | null {
-  const field = template.slots.shape[key];
-  const checks =
-    (field as unknown as {
-      _zod?: { def?: { checks?: Array<{ _zod?: { def?: { check?: string; maximum?: number } } }> } };
-    })?._zod?.def?.checks ?? [];
-
-  for (const check of checks) {
-    const def = check?._zod?.def;
-    if (def?.check === "max_length" && typeof def.maximum === "number") {
-      return def.maximum;
-    }
-  }
-  return null;
-}
-
-function trimToLimits(
-  template: AnyTemplateDefinition,
-  slots: Record<string, string>,
-): { slots: Record<string, string>; warnings: string[] } {
-  const result: Record<string, string> = {};
-  const warnings: string[] = [];
-
-  for (const [key, raw] of Object.entries(slots)) {
-    const value = (raw ?? "").trim();
-    const limit = maxLengthOf(template, key);
-
-    if (limit !== null && value.length > limit) {
-      // Cut at a word boundary so the trim does not end mid-word.
-      const cut = value.slice(0, limit);
-      const lastSpace = cut.lastIndexOf(" ");
-      result[key] = (lastSpace > limit * 0.6 ? cut.slice(0, lastSpace) : cut).trim();
-      warnings.push(
-        `"${key}" volvió con ${value.length} caracteres (máximo ${limit}) y se recortó.`,
-      );
-    } else {
-      result[key] = value;
-    }
-  }
-
-  return { slots: result, warnings };
-}
 
 export async function generatePost(
   input: GeneratePostInput,

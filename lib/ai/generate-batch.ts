@@ -27,6 +27,7 @@ import {
 } from "@/lib/batch/recipe";
 import { CodedError } from "@/lib/errors";
 import { parseWithRetry } from "./parse-with-retry";
+import { trimToLimits } from "./slot-limits";
 import { estimateCostUsd } from "./pricing";
 
 export const BATCH_MODEL = "claude-sonnet-5";
@@ -116,50 +117,6 @@ export type GenerateBatchResult = {
   durationMs: number;
   promptVersion: string;
 };
-
-function maxLengthOf(template: AnyTemplateDefinition, key: string): number | null {
-  const field = template.slots.shape[key];
-  const checks =
-    (field as unknown as {
-      _zod?: {
-        def?: {
-          checks?: Array<{ _zod?: { def?: { check?: string; maximum?: number } } }>;
-        };
-      };
-    })?._zod?.def?.checks ?? [];
-
-  for (const check of checks) {
-    const def = check?._zod?.def;
-    if (def?.check === "max_length" && typeof def.maximum === "number") {
-      return def.maximum;
-    }
-  }
-  return null;
-}
-
-function trimToLimits(
-  template: AnyTemplateDefinition,
-  slots: Record<string, string>,
-  warnings: string[],
-): Record<string, string> {
-  const result: Record<string, string> = {};
-
-  for (const [key, raw] of Object.entries(slots)) {
-    const value = (raw ?? "").trim();
-    const limit = maxLengthOf(template, key);
-
-    if (limit !== null && value.length > limit) {
-      const cut = value.slice(0, limit);
-      const lastSpace = cut.lastIndexOf(" ");
-      result[key] = (lastSpace > limit * 0.6 ? cut.slice(0, lastSpace) : cut).trim();
-      warnings.push(`"${key}" se recortó de ${value.length} a ${limit} caracteres.`);
-    } else {
-      result[key] = value;
-    }
-  }
-
-  return result;
-}
 
 /**
  * Enforce carousel structure after the fact rather than in the schema.
@@ -409,10 +366,11 @@ export async function generateBatch(input: {
     slides: post.slides.map((slide) => {
       const template = getTemplate(slide.template_slug);
       const slots = slide.slots as Record<string, string>;
-      return {
-        templateSlug: slide.template_slug,
-        slots: template ? trimToLimits(template, slots, warnings) : slots,
-      };
+      if (!template) return { templateSlug: slide.template_slug, slots };
+
+      const trimmed = trimToLimits(template, slots);
+      warnings.push(...trimmed.warnings);
+      return { templateSlug: slide.template_slug, slots: trimmed.slots };
     }),
   }));
 
