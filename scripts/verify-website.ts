@@ -17,7 +17,8 @@
  * Run:
  *   npx tsx --require ./scripts/_stub-server-only.cjs scripts/verify-website.ts
  */
-import { isPrivateAddress, normalizeSiteUrl } from "../lib/web/safe-fetch";
+import { describeStatus, isPrivateAddress, normalizeSiteUrl } from "../lib/web/safe-fetch";
+import { CodedError, describeError } from "../lib/errors";
 import {
   extractColors,
   extractFontFamilies,
@@ -149,6 +150,56 @@ async function main() {
     dataRefused = true;
   }
   assert("refuses a data: URL rather than repairing it", dataRefused);
+
+  // -------------------------------------------------------------------------
+  /*
+    The regression a user found, and it was a lie rather than a crash.
+
+    A client's site answering 403 surfaced as "Hay un problema con el proveedor
+    de IA / No es algo que puedas arreglar desde acá" — Claude had not been
+    called at all, and the person reading it could in fact fix it. Both halves
+    are asserted here: the class, and the sentence that reaches the screen.
+  */
+  section("What a failing site says");
+
+  const statusChecks = [
+    [403, "bloquea", "a WAF refusing us"],
+    [401, "bloquea", "auth required"],
+    [404, "no existe", "wrong address"],
+    [410, "no existe", "gone"],
+    [429, "exceso de pedidos", "the site rate-limiting us"],
+    [500, "caído", "the site is broken"],
+    [503, "caído", "the site is down"],
+    [418, "respondió 418", "anything else, named plainly"],
+  ] as const;
+
+  for (const [status, fragment, why] of statusChecks) {
+    const message = describeStatus(status);
+    assert(
+      `${status} (${why}) explains itself`,
+      message.includes(fragment) && message.includes(String(status)),
+      message,
+    );
+  }
+
+  const siteToast = describeError(new CodedError("site", describeStatus(403)), {
+    error: describeStatus(403),
+    code: "site",
+  });
+  assert(
+    "a site failure is NOT blamed on the AI provider",
+    !siteToast.title.includes("proveedor de IA"),
+    siteToast.title,
+  );
+  assert(
+    "and the toast carries the reason, not a generic line",
+    siteToast.description.includes("403"),
+    siteToast.description,
+  );
+  assert(
+    "every branch tells the reader something to do next",
+    statusChecks.every(([status]) => /probá|revisá|esperá|reintentá|cargá/i.test(describeStatus(status))),
+  );
 
   // -------------------------------------------------------------------------
   section("Colour extraction");

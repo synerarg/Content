@@ -18,6 +18,7 @@ export type ErrorClass =
   | "safety"
   | "network"
   | "provider"
+  | "site"
   | "config"
   | "too_long"
   | "validation"
@@ -100,6 +101,26 @@ const BY_CLASS: Record<ErrorClass, Omit<DescribedError, "cls">> = {
     title: "Hay un problema con el proveedor de IA",
     description:
       "No es algo que puedas arreglar desde acá. Si sigue pasando, avisale a Synera.",
+    retryable: true,
+  },
+  /*
+    El SITIO del cliente falló — no nosotros y no el proveedor de IA.
+
+    Separada de `provider` después de ver el error real: un 403 de Cloudflare
+    salía como "Hay un problema con el proveedor de IA / no es algo que puedas
+    arreglar desde acá", que es falso dos veces. Claude nunca llegó a
+    ejecutarse, y quien lo lee SÍ puede arreglarlo — pegando otra página,
+    corrigiendo la URL, o cargando la marca a mano.
+
+    A diferencia del resto de las clases, el mensaje puntual manda: "el sitio
+    respondió 404" y "el sitio bloquea lectores automáticos" piden cosas
+    distintas y no hay una frase genérica que sirva para las dos. Por eso
+    `describeError` usa el texto tal cual viene, y por eso los mensajes de
+    lib/web/safe-fetch.ts están escritos para que los lea un humano.
+  */
+  site: {
+    title: "No pudimos leer ese sitio",
+    description: "Probá con la home del cliente, o cargá la marca a mano.",
     retryable: true,
   },
   config: {
@@ -200,9 +221,17 @@ export function describeError(
     The provider's own text is kept as the description when the class is not
     otherwise informative. "Exhausted balance" is genuinely more useful than a
     generic sentence — what it must never do is arrive with no framing at all.
+
+    `site` goes further and REPLACES the description: those messages are written
+    here, in Spanish, naming what the site did and what to try next. The generic
+    line is only the fallback for a payload that arrived without one.
   */
   const description =
-    cls === "unknown" && raw ? `${base.description} (${raw})` : base.description;
+    cls === "site" && raw
+      ? raw
+      : cls === "unknown" && raw
+        ? `${base.description} (${raw})`
+        : base.description;
 
   return { cls, title: base.title, description, retryable: base.retryable };
 }

@@ -162,7 +162,7 @@ scripts/verify-rls.mjs    `npm run verify:rls`
 scripts/verify-products.ts          `npm run verify:products` — 31 assertions
 scripts/verify-schedule.ts          `npm run verify:schedule` — 59, twice (see §7)
 scripts/verify-legibility.ts        `npm run verify:legibility` — 26 assertions
-scripts/verify-website.ts           `npm run verify:website` — 66 assertions
+scripts/verify-website.ts           `npm run verify:website` — 77 assertions
 scripts/verify-search.ts            `npm run verify:search` — 22 assertions
 scripts/probe-variants.ts           `npm run probe:variants` — LIVE, ~US$0.04
 scripts/probe-website.ts            `npm run probe:website <url>` — LIVE, ~US$0.04
@@ -262,7 +262,9 @@ template automatically teaches the prompts its slot names and character limits.
 | Calendar PostgREST queries | PASS — both embeds answer `200 []` anonymously, so the shape is valid and RLS filters it |
 | Variants, **live** (`npm run probe:variants`) | PASS — 16 assertions, US$0.04. Distinct angles, limits respected, no tuteo, hashtags normalised. Read by hand: "costo de no hacerlo" / "el cliente esperando" / "la pérdida invisible" — three real arguments, none reusing the original's |
 | Legibility, 26 asserts (`npm run verify:legibility`) | PASS — including the crossing case that caught the original design |
-| Website import, 66 asserts (`npm run verify:website`) | PASS — every address-filter bypass worth naming, plus extraction against a fixture |
+| Website import, 77 asserts (`npm run verify:website`) | PASS — every address-filter bypass worth naming, extraction against a fixture, and what each failing status tells the user |
+| Site failures are not blamed on the AI, **live** | **PASS after the fix, 2026-08-07** — despegar.com.ar (403 behind a WAF) now reads "El sitio bloquea a los lectores automáticos… probá con otra página"; it used to read "Hay un problema con el proveedor de IA" |
+| Real browser User-Agent, **live A/B** | **PASS** — patagonia.com answers 404 to the old crawler-shaped UA and 301 to a Chrome UA; the page now imports. Six sites tested; Sec-Fetch-\* and a full browser Accept changed nothing and were not added |
 | Website import, **live** against supabase.com | PASS with a caveat — voice draft is genuinely useful and honest about its gaps; the palette needed two fixes found by this run alone (see §7) |
 | `search_content` RPC | PASS — valid shape, handles quoted phrases and `-exclusions` without raising, answers `200 []` anonymously |
 | Search snippets, 22 asserts (`npm run verify:search`) | PASS — including the accent-offset trap |
@@ -553,7 +555,7 @@ npm run verify:rls     # anonymous-access leak check
 npm run verify:products  # 31 product assertions, no provider needed
 npm run verify:schedule  # 59 calendar assertions, run twice (local zone + UTC)
 npm run verify:legibility  # 26 contrast assertions against known bitmaps
-npm run verify:website     # 66 SSRF + extraction assertions, no network
+npm run verify:website     # 77 SSRF + extraction + error-copy assertions, no network
 npm run verify:search      # 22 snippet assertions
 npm run probe:variants     # LIVE Claude call, ~US$0.04
 npm run probe:website <url># LIVE fetch + Claude call, ~US$0.04
@@ -972,6 +974,17 @@ SSRF is the real risk and §7 carries the trap. **Known limit:** only hex and
 `rgb()` are read, so a site written in `oklch()` or `hsl()` yields fewer
 colours — measured against supabase.com, where the green and the neutrals came
 through and the true near-black background did not.
+
+**When the site itself refuses** (403 behind a WAF, 404, 5xx) the failure is its
+own error class, `site`, and the message names the status and one thing to try.
+It used to be classed `provider`, which put "Hay un problema con el proveedor de
+IA / no es algo que puedas arreglar desde acá" on screen for a client site that
+answered 403 — false twice over: Claude was never called, and the reader *can*
+fix it. `site` is also the one class whose specific message REPLACES the generic
+description, because a 403 and a 404 ask for different things.
+
+Some sites (despegar.com.ar) refuse a Chrome User-Agent too. Those are reported,
+not worked around.
 
 ### Search over everything written
 

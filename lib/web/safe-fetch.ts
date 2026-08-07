@@ -38,9 +38,47 @@ const MAX_BYTES = 2_000_000;
 const MAX_REDIRECTS = 4;
 const TIMEOUT_MS = 12_000;
 
-/** A real browser UA: plenty of sites serve a stub or a 403 to anything else. */
+/*
+  A real browser UA, and it has to be a real one.
+
+  The string here used to be "Mozilla/5.0 (compatible; SyneraContentStudio/1.0;
+  +https://synera.com.ar)" under a comment claiming it was a browser's. It is
+  not one — the `compatible; <name>/<version>` shape is what crawlers send, and
+  WAFs read it as exactly that. Measured 2026-08-07: patagonia.com answers 404
+  to it and 301 to the string below. Same request otherwise.
+
+  Also measured, and NOT added: Sec-Fetch-*, Upgrade-Insecure-Requests and a
+  full browser Accept changed nothing on any of six sites. Headers that buy
+  nothing do not go in.
+
+  A site that blocks this too (despegar.com.ar answers 403 either way) is
+  reported as such rather than worked around.
+*/
 const USER_AGENT =
-  "Mozilla/5.0 (compatible; SyneraContentStudio/1.0; +https://synera.com.ar)";
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+
+/**
+ * What a failing status means for the person who pasted the URL.
+ *
+ * Every branch names the status AND one thing to try, because they are not the
+ * same thing to try: a 403 wants a different page, a 404 wants a corrected
+ * address, a 503 wants waiting.
+ */
+export function describeStatus(status: number): string {
+  if (status === 401 || status === 403) {
+    return `El sitio bloquea a los lectores automáticos (respondió ${status}). Probá con otra página del sitio, o cargá la marca a mano.`;
+  }
+  if (status === 404 || status === 410) {
+    return `Esa dirección no existe en el sitio (respondió ${status}). Revisá la URL o probá con la home del cliente.`;
+  }
+  if (status === 429) {
+    return "El sitio nos frenó por exceso de pedidos (respondió 429). Esperá un minuto y reintentá.";
+  }
+  if (status >= 500) {
+    return `El sitio está caído o con problemas (respondió ${status}). Reintentá más tarde.`;
+  }
+  return `El sitio respondió ${status}. Probá con la home del cliente.`;
+}
 
 function ipv4ToInt(ip: string): number | null {
   const parts = ip.split(".");
@@ -253,7 +291,10 @@ export async function fetchSitePage(input: string): Promise<FetchedPage> {
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location");
       if (!location) {
-        throw new CodedError("provider", "El sitio redirigió a ninguna parte.");
+        throw new CodedError(
+          "site",
+          "El sitio redirigió a ninguna parte. Probá con la home del cliente.",
+        );
       }
       // Resolved against the current URL, so a relative Location works — and
       // the next iteration re-checks the address before going anywhere.
@@ -262,10 +303,7 @@ export async function fetchSitePage(input: string): Promise<FetchedPage> {
     }
 
     if (!response.ok) {
-      throw new CodedError(
-        "provider",
-        `El sitio respondió ${response.status}. Probá con la home del cliente.`,
-      );
+      throw new CodedError("site", describeStatus(response.status));
     }
 
     const contentType = response.headers.get("content-type") ?? "";
@@ -280,5 +318,8 @@ export async function fetchSitePage(input: string): Promise<FetchedPage> {
     return { finalUrl: url.toString(), html: text, truncated };
   }
 
-  throw new CodedError("provider", "El sitio redirige demasiadas veces.");
+  throw new CodedError(
+    "site",
+    "El sitio redirige demasiadas veces. Probá con la home del cliente.",
+  );
 }

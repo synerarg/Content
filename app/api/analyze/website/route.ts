@@ -100,12 +100,23 @@ export async function POST(request: Request) {
   } catch (cause) {
     const message =
       cause instanceof Error ? cause.message : "No se pudo leer el sitio.";
+    const code = codeOf(cause);
+
+    /*
+      Attributed to whoever actually failed.
+
+      `site` and `validation` are raised before a single token is sent, so
+      logging them against "anthropic" put failures Claude never saw into
+      Claude's row of the usage screen. The distinction matters when someone
+      opens that screen to answer "¿por qué falla tanto la lectura de sitios?".
+    */
+    const failedAt = code === "site" || code === "validation" ? "fetch" : "anthropic";
 
     await logGeneration({
       workspaceId,
       brandId: null,
       kind: "text",
-      provider: "anthropic",
+      provider: failedAt,
       model: WEBSITE_MODEL,
       input: { url: parsed.data.url },
       output: {},
@@ -113,9 +124,6 @@ export async function POST(request: Request) {
       error: message,
     });
 
-    return NextResponse.json(
-      { error: message, code: codeOf(cause) },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: message, code }, { status: 500 });
   }
 }
