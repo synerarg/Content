@@ -625,6 +625,56 @@ type-only template must set it.
 account ran out of credit first. The before/after comparison is still owed, and the two
 new templates have not been looked at by anyone.
 
+### NEXT UP: product photos (designed, not built)
+
+Agreed with the account owner and ready to start. A client uploads a photo of their
+product and it appears in the generated piece.
+
+**The design decision, already made — do not re-litigate it.** There are two ways to do
+this and only one is right:
+
+- Let the image model draw the product from a reference. It **redraws** it: invented
+  letterforms on the label, the shape slightly off, the logo garbled. Fine for a mood,
+  unacceptable for a client's actual bottle.
+- Composite the real pixels with code. Exact, never distorted.
+
+The second, because it is **the same rule the whole product is built on**: AI never
+renders typography, code does. A product is a brand asset like the logo — it gets
+composited, not generated.
+
+**The refinement on top:** send the product photo to the model as a *scene reference* so
+the light, perspective and surface match, while the actual product pixels are still laid
+over it by the template. Best of both, and it keeps the rule.
+
+**Split by dependency — most of this needs no image API:**
+
+| Piece | Needs the provider? |
+|---|---|
+| `products` table per brand, upload, storage | no |
+| Background removal (browser WASM, keeps bytes off the function) | no |
+| A template with a product zone | no |
+| Batch generator knowing a product is in play, so the copy is about it | no |
+| Scene prompt describing a surface and a defined empty area to hold it | no |
+| The product photo as a scene reference | **yes** |
+
+**Watch-outs found while designing it:**
+
+- `brand-assets` has a **2 MiB** limit (migration 0007). A phone photo exceeds it — either
+  raise the bucket limit or compress in the browser before upload.
+- `app/api/uploads/sign` only knows `kind: "logo" | "font"`. Needs a `product` kind, and
+  the extension allowlist already covers png/jpeg/webp.
+- The product zone template is also the third structurally-different layout, so it
+  contributes to the design-quality work in the section above rather than being separate.
+
+**Two probes are still owed, both blocked on Gemini credit:**
+
+1. Does the interactions API accept an input image? The first shape tried —
+   `{type:"image", mime_type, data}`, mirroring how the API *returns* images — got past
+   schema validation and was rejected on **billing**, not on shape. Promising but not
+   proof. Probe written and ready.
+2. A before/after of the new image prompt (`IMAGE_PROMPT_VERSION 2026-08-07.1`), which has
+   never run against the provider.
+
 ### Where published content comes from
 
 Today: **pasted in by hand** at `/marcas/[id]/historial`. The table carries `source` and
