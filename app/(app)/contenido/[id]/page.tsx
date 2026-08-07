@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { BatchDetail, type BatchPost } from "@/components/batch/batch-detail";
 import { typographySchema, defaultBrandFormValues } from "@/lib/schemas/brand";
+import { productRowToProduct } from "@/lib/schemas/product";
 import type { EditorBrand } from "@/lib/render/use-render-assets";
 import type { FormatKey } from "@/templates/types";
 
@@ -43,9 +44,11 @@ export default async function BatchPage({
     .from("content_batches")
     .select(
       `id, title, brief, status, created_at,
-       brands (id, name, palette, typography, logo_path, brand_fonts (family, weight, style, storage_path)),
+       brands (id, name, palette, typography, logo_path,
+               brand_fonts (family, weight, style, storage_path),
+               brand_products (id, name, description, image_path, has_transparency)),
        posts (id, position, type, caption, hashtags, cta,
-              slides (id, position, template_slug, format, slots, background_path, generation_params,
+              slides (id, position, template_slug, format, slots, product_id, background_path, generation_params,
                       background_status, background_error, background_attempts))`,
     )
     .eq("id", id)
@@ -82,6 +85,7 @@ export default async function BatchPage({
       : defaultBrandFormValues().typography,
     logo_path: brandRow.logo_path,
     fonts: brandRow.brand_fonts ?? [],
+    products: (brandRow.brand_products ?? []).map(productRowToProduct),
   };
 
   // Backgrounds live in a private bucket, so the browser needs signed URLs.
@@ -124,6 +128,7 @@ export default async function BatchPage({
             typeof slide.slots === "object" && slide.slots !== null
               ? (slide.slots as Record<string, string>)
               : {},
+          productId: slide.product_id,
           backgroundPath: slide.background_path,
           backgroundSignedUrl: slide.background_path
             ? (signedByPath.get(slide.background_path) ?? null)

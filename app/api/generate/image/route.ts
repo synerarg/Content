@@ -9,6 +9,7 @@ import { artDirectionSchema } from "@/lib/schemas/brand";
 import { logGeneration } from "@/lib/ai/log-generation";
 import { estimateImageCostUsd } from "@/lib/ai/pricing";
 import { codeOf } from "@/lib/errors";
+import { templateUsesProduct } from "@/templates/registry";
 import { FORMAT_KEYS, type FormatKey } from "@/templates/types";
 
 /*
@@ -71,6 +72,14 @@ export async function POST(request: Request) {
   }
 
   const artDirection = artDirectionSchema.safeParse(brand.art_direction);
+  /*
+    Derived from the template rather than accepted as a request field.
+
+    A product template ALWAYS composites a product, so the two can never
+    disagree — and a caller that forgot to send the flag would get a scene with
+    something already standing in the spot the product is about to occupy.
+  */
+  const hasProduct = templateUsesProduct(templateSlug);
   const prompt = composeImagePrompt({
     brief,
     artDirection: artDirection.success
@@ -78,6 +87,7 @@ export async function POST(request: Request) {
       : { photographic_style: "", lighting: "", palette_notes: "", avoid: [] },
     format,
     templateSlug,
+    hasProduct,
   });
 
   const size = GENERATION_SIZE[format];
@@ -134,6 +144,7 @@ export async function POST(request: Request) {
         templateSlug,
         prompt,
         promptVersion: IMAGE_PROMPT_VERSION,
+        hasProduct,
         width: size.width,
         height: size.height,
         seed: seed ?? null,

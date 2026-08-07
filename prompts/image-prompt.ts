@@ -11,8 +11,14 @@ import type { FormatKey } from "@/templates/types";
   none), plus a photographic-craft and anti-cliché block. Untested against the
   provider: the Gemini account ran out of credit before a before/after could be
   run. The comparison is still owed.
+
+  2026-08-07.2 — product scenes. When a piece carries a product, the scene must
+  contain an EMPTY staging area and no object standing in it; the client's real
+  product is composited into that space afterwards. Also untested live, and it
+  is the directive most likely to need a second pass: the failure mode is a
+  scene that helpfully includes a bottle of its own.
 */
-export const IMAGE_PROMPT_VERSION = "2026-08-07.1";
+export const IMAGE_PROMPT_VERSION = "2026-08-07.2";
 
 export type ArtDirection = {
   photographic_style: string;
@@ -74,7 +80,37 @@ const COMPOSITION_BY_TEMPLATE: Record<string, string> = {
     "Composition: quieter and flatter than a cover — this frame supports a numbered point rather than leading. Even tone across the middle, subject off to one edge, generous empty space.",
   "editorial-split":
     "Composition: this image is CROPPED to a horizontal band, not shown whole. Put the subject dead centre and leave room on all four sides, because the top and bottom will be cut away. Nothing important near any edge.",
+  "product-hero":
+    "Composition: a setting with a clear surface — a counter, a table, a shelf, a ledge — running across the middle of the frame. The middle band is the emptiest part of the image. The top and bottom fifths are calm and darker, because a headline sits at the top and a caption at the bottom.",
 };
+
+/*
+  THE EMPTY STAGING AREA
+
+  Appended whenever the piece carries a product, and it is the whole reason a
+  product scene is a different job from a background.
+
+  The model's instinct on being handed "a marble counter, morning light" is to
+  put something photogenic on it — a bottle, a jar, a cup. Then the template
+  composites the client's real product on top and the piece ships with two
+  products in it, one of them invented. So the scene is asked for as an
+  explicitly empty set: a place, a light and a surface with nothing standing on
+  it.
+
+  Stated as what to DO ("leave the centre clear") before what to avoid, because
+  a prompt that is only a list of prohibitions tends to produce exactly what it
+  forbids. The prohibitions are still spelled out afterwards — the failure here
+  is expensive and silent, since a scene with its own bottle looks perfectly
+  good until you notice the client's product is standing next to a stranger's.
+*/
+const PRODUCT_SCENE_DIRECTIVE = [
+  "This is an empty set, photographed before the product arrives.",
+  "Leave the central area of the frame completely clear and unobstructed: an empty surface, ready to have an object placed on it.",
+  "Show the place, the light and the surface only.",
+  "There is NO product, NO bottle, NO jar, NO box, NO packaging, NO container and NO merchandise anywhere in the image.",
+  "No hands holding anything, no object at the centre of attention.",
+  "Any props are peripheral, out of focus and away from the centre.",
+].join(" ");
 
 /*
   What separates a photograph from a stock image.
@@ -101,11 +137,21 @@ export function composeImagePrompt({
   artDirection,
   format,
   templateSlug,
+  hasProduct = false,
 }: {
   brief: string;
   artDirection: ArtDirection;
   format: FormatKey;
   templateSlug: string;
+  /**
+   * Whether a real product will be composited into this scene afterwards.
+   *
+   * Passed as a boolean and not as the product itself, deliberately: naming the
+   * product would tell the model what to draw, and the one thing it must not do
+   * is draw it. What the scene should look like for THIS product is already
+   * carried by the brief, which the copy model wrote knowing the product.
+   */
+  hasProduct?: boolean;
 }): string {
   const parts: string[] = [];
 
@@ -132,7 +178,12 @@ export function composeImagePrompt({
   const composition = COMPOSITION_BY_TEMPLATE[templateSlug];
   if (composition) parts.push(composition);
 
-  // 4. Brand-specific exclusions, then the non-negotiable ones.
+  // 5. The staging area, AFTER the composition it constrains and before the
+  //    exclusions. Placing it here means "leave the middle empty" is read as a
+  //    refinement of the frame rather than as a competing instruction.
+  if (hasProduct) parts.push(PRODUCT_SCENE_DIRECTIVE);
+
+  // 6. Brand-specific exclusions, then the non-negotiable ones.
   const avoid = artDirection.avoid.map((item) => item.trim()).filter(Boolean);
   if (avoid.length > 0) {
     parts.push(`Avoid: ${avoid.join(", ")}.`);

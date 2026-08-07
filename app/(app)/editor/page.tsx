@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/app-shell/empty-state";
 import { SlideEditor } from "@/components/editor/slide-editor";
 import { Button } from "@/components/ui/button";
 import { typographySchema, defaultBrandFormValues } from "@/lib/schemas/brand";
+import { productRowToProduct } from "@/lib/schemas/product";
 import type { EditorBrand } from "@/lib/render/use-render-assets";
 
 function toEditorBrand(row: {
@@ -20,6 +21,13 @@ function toEditorBrand(row: {
     weight: number;
     style: string;
     storage_path: string;
+  }>;
+  brand_products: Array<{
+    id: string;
+    name: string;
+    description: string | null;
+    image_path: string;
+    has_transparency: boolean;
   }>;
 }): EditorBrand {
   const fallback = defaultBrandFormValues();
@@ -41,6 +49,7 @@ function toEditorBrand(row: {
     typography: typography.success ? typography.data : fallback.typography,
     logo_path: row.logo_path,
     fonts: row.brand_fonts ?? [],
+    products: (row.brand_products ?? []).map(productRowToProduct),
   };
 }
 
@@ -55,7 +64,7 @@ export default async function EditorPage() {
   const { data, error } = await supabase
     .from("brands")
     .select(
-      "id, name, palette, typography, logo_path, brand_fonts(family, weight, style, storage_path)",
+      "id, name, palette, typography, logo_path, brand_fonts(family, weight, style, storage_path), brand_products(id, name, description, image_path, has_transparency)",
     )
     .order("name");
 

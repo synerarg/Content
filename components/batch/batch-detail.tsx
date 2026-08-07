@@ -21,6 +21,7 @@ import {
   useRenderAssets,
   type EditorBrand,
 } from "@/lib/render/use-render-assets";
+import { useProductAssets } from "@/lib/render/use-product-assets";
 import {
   downloadBlob,
   rasterizeSlide,
@@ -33,6 +34,7 @@ import {
   duplicateBatch,
   duplicatePost,
   restoreBatch,
+  setSlideProduct,
   updatePost,
   updateSlideSlots,
 } from "@/app/(app)/contenido/actions";
@@ -51,6 +53,7 @@ import {
   isSlotRequired,
   slotLabel,
   templateUsesBackground,
+  templateUsesProduct,
 } from "@/templates/registry";
 import { FORMATS, type FormatKey } from "@/templates/types";
 import { notifyError } from "@/lib/notify";
@@ -62,6 +65,13 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { SaveIndicator } from "@/components/ui/save-indicator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
 export type BatchSlide = {
@@ -69,6 +79,8 @@ export type BatchSlide = {
   templateSlug: string;
   format: FormatKey;
   slots: Record<string, string>;
+  /** Which of the brand's products this slide composites, if any. */
+  productId: string | null;
   backgroundPath: string | null;
   backgroundSignedUrl: string | null;
   backgroundBrief: string;
@@ -107,6 +119,19 @@ export function BatchDetail({
 }) {
   const router = useRouter();
   const { brandTokens, fontCss, ready } = useRenderAssets(brand);
+  const { byId: productAssets } = useProductAssets(brand.products);
+
+  /**
+   * The product this slide composites, resolved to a blob URL.
+   *
+   * Null for a slide whose template does not use one, and also for a slide
+   * whose product was deleted — `slides.product_id` is `on delete set null`,
+   * so that path is normal rather than exceptional.
+   */
+  function productFor(slide: BatchSlide) {
+    if (!templateUsesProduct(slide.templateSlug)) return null;
+    return slide.productId ? (productAssets[slide.productId] ?? null) : null;
+  }
 
   const [posts, setPosts] = useState(initialPosts);
   const [backgrounds, setBackgrounds] = useState<Record<string, string>>({});
@@ -294,6 +319,28 @@ export function BatchDetail({
     return result.ok;
   };
 
+  /*
+    Written straight through instead of autosaved.
+
+    A product is picked from a list, not typed, so there is no stream of
+    keystrokes to debounce — and `revalidate: false` on the action keeps this
+    from re-running the effect that owns every background blob URL on screen,
+    which is the flicker documented in HANDOFF §7.
+  */
+  async function changeProduct(slideId: string, productId: string) {
+    setPosts((current) =>
+      current.map((post) => ({
+        ...post,
+        slides: post.slides.map((slide) =>
+          slide.id === slideId ? { ...slide, productId } : slide,
+        ),
+      })),
+    );
+
+    const result = await setSlideProduct(slideId, productId);
+    if (!result.ok) notifyError(new Error(result.error));
+  }
+
   function patchSlide(slideId: string, slots: Record<string, string>) {
     setPosts((current) =>
       current.map((post) => ({
@@ -462,6 +509,12 @@ export function BatchDetail({
   */
   const incomplete = allSlides.filter((slide) => {
     if (!isSlideTextComplete(slide.templateSlug, slide.slots)) return true;
+
+    // Same reasoning as a missing background, and a worse-looking hole: a
+    // product template with no product rasterizes into a dashed empty box where
+    // the product should be.
+    if (templateUsesProduct(slide.templateSlug) && !productFor(slide)) return true;
+
     // A template that does not use one is complete without it.
     if (!templateUsesBackground(slide.templateSlug)) return false;
 
@@ -469,13 +522,21 @@ export function BatchDetail({
     return !(status === "ready" || Boolean(backgrounds[slide.id]));
   });
 
+  const missingProduct = incomplete.some(
+    (slide) => templateUsesProduct(slide.templateSlug) && !productFor(slide),
+  );
+
   const exportBlockedReason =
     !ready
       ? "Esperá a que terminen de cargar las tipografías."
       : queue.running
         ? "Esperá a que termine de generar los fondos."
         : incomplete.length > 0
-          ? `${incomplete.length} placa${incomplete.length === 1 ? "" : "s"} sin fondo o con textos obligatorios vacíos.`
+          ? `${incomplete.length} placa${incomplete.length === 1 ? "" : "s"} ${
+              missingProduct
+                ? "sin producto, sin fondo o con textos obligatorios vacíos."
+                : "sin fondo o con textos obligatorios vacíos."
+            }`
           : null;
 
   /*
@@ -722,6 +783,7 @@ export function BatchDetail({
                         format={slide.format}
                         brand={brandTokens}
                         backgroundUrl={backgrounds[slide.id] ?? null}
+                        product={productFor(slide)}
                         fontCss={fontCss}
                       />
                     </div>
@@ -747,6 +809,37 @@ export function BatchDetail({
                         Sin fondo generado — esta plantilla es sólo tipografía.
                       </p>
                     )}
+
+                    {/*
+                      The product is chosen when the batch is created, so this is
+                      a correction rather than a setup step — but it has to be
+                      here, because "wrong product on one piece" is otherwise
+                      only fixable by regenerating the whole batch.
+                    */}
+                    {templateUsesProduct(slide.templateSlug) ? (
+                      brand.products.length === 0 ? (
+                        <p className="px-2 text-[11px] text-muted-foreground">
+                          Esta plantilla necesita un producto y la marca no tiene
+                          ninguno cargado.
+                        </p>
+                      ) : (
+                        <Select
+                          value={slide.productId ?? ""}
+                          onValueChange={(next) => changeProduct(slide.id, next)}
+                        >
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue placeholder="Elegí un producto" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {brand.products.map((item) => (
+                              <SelectItem key={item.id} value={item.id}>
+                                {item.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )
+                    ) : null}
 
                     {/*
                       Progressive disclosure: the scene brief and the seed are
@@ -982,6 +1075,7 @@ export function BatchDetail({
                   format={slide.format}
                   brand={brandTokens}
                   backgroundUrl={backgrounds[slide.id] ?? null}
+                  product={productFor(slide)}
                   fontCss={fontCss}
                 />
               );

@@ -7,6 +7,8 @@ import { CarouselBody, carouselBodySlots } from "./carousel-body";
 import { StoryCta, storyCtaSlots } from "./story-cta";
 import { EditorialSplit, editorialSplitSlots } from "./editorial-split";
 import { Statement, statementSlots } from "./statement";
+import { ProductHero, productHeroSlots } from "./product-hero";
+import { ProductShowcase, productShowcaseSlots } from "./product-showcase";
 import type { FormatKey, TemplateProps, TemplateRole } from "./types";
 
 /**
@@ -45,6 +47,26 @@ export type AnyTemplateDefinition = {
    * slide that was never going to have one.
    */
   usesBackground?: boolean;
+  /**
+   * Whether this template composites a client product.
+   *
+   * Defaults to false. Setting it changes three things at once, which is why it
+   * is a registry flag and not something each screen decides for itself: the
+   * piece needs a product chosen before it is complete, the export gate must
+   * refuse to rasterize it without one (a product template with no product is a
+   * dashed placeholder box, and that is not a file to hand a client), and the
+   * scene prompt has to leave an empty staging area instead of composing freely.
+   */
+  usesProduct?: boolean;
+  /**
+   * Whether the product needs a real cut-out to look right here.
+   *
+   * Informational, never a hard block: both product templates render an opaque
+   * photo as a deliberately framed image rather than refusing. It exists so the
+   * picker can say so BEFORE the piece is generated, instead of leaving someone
+   * to work out why their product looks like a photo stuck onto a photo.
+   */
+  requiresCutout?: boolean;
   /**
    * Rendering is inherently dynamic — the slug is only known at runtime — so
    * the props type is widened here. Slot values are validated against `slots`
@@ -181,6 +203,54 @@ export const TEMPLATES: AnyTemplateDefinition[] = [
     component: Statement,
   },
   {
+    slug: "product-hero",
+    name: "Producto en escena",
+    description:
+      "La foto real del producto sobre una escena generada. El modelo hace la escena; el producto se pega, nunca se redibuja.",
+    role: "single",
+    formats: ["feed", "story"],
+    slots: productHeroSlots,
+    usesProduct: true,
+    requiresCutout: true,
+    slotLabels: {
+      headline: "Titular",
+      detail: "Detalle o ficha",
+      cta: "Llamado a la acción",
+    },
+    slotHints: {
+      headline:
+        "Qué le resuelve el producto a quien lo ve. No repitas el nombre del producto: el diseño ya lo pone.",
+      detail:
+        "El dato concreto: medida, materia prima, plazo de entrega, precio. Opcional.",
+      cta: "Dos o tres palabras en imperativo. Opcional.",
+    },
+    component: ProductHero,
+  },
+  {
+    slug: "product-showcase",
+    name: "Producto sobre color",
+    description:
+      "El producto sobre el color de la marca, sin foto generada. Rápida, gratis y nunca parece hecha por una IA.",
+    role: "single",
+    formats: ["feed", "story"],
+    slots: productShowcaseSlots,
+    // No generated image: the queue skips it and the export never waits for one.
+    usesBackground: false,
+    usesProduct: true,
+    slotLabels: {
+      headline: "Titular",
+      detail: "Detalle o ficha",
+      cta: "Llamado a la acción",
+    },
+    slotHints: {
+      headline:
+        "La idea principal, corta. Sin foto de fondo, el titular es todo el peso visual.",
+      detail: "Ficha, beneficio o precio. Una o dos líneas. Opcional.",
+      cta: "La acción concreta: 'Pedilo por DM', 'Link en bio'. Opcional.",
+    },
+    component: ProductShowcase,
+  },
+  {
     slug: "carousel-cover",
     name: "Carrusel · tapa",
     description:
@@ -282,6 +352,16 @@ export const TEMPLATE_SAMPLES: Record<string, Record<string, string>> = {
     statement: "Si tenés que abrir tres planillas para saber cuánto facturaste, no tenés un sistema: tenés un problema.",
     attribution: "Synera",
   },
+  "product-hero": {
+    headline: "El mismo aceite que usan tres cocinas premiadas",
+    detail: "500 ml · primera prensada en frío · Maipú, Mendoza",
+    cta: "Pedilo",
+  },
+  "product-showcase": {
+    headline: "Cosecha 2026, ya disponible",
+    detail: "Sólo 400 botellas numeradas. Cuando se termina, se termina.",
+    cta: "Reservá la tuya",
+  },
   "carousel-cover": {
     headline: "Cinco cosas que tu pyme deja de perder con un CRM",
     subline: "Ninguna tiene que ver con la tecnología.",
@@ -377,3 +457,18 @@ export function isSlideTextComplete(
 export function templateUsesBackground(templateSlug: string): boolean {
   return getTemplate(templateSlug)?.usesBackground !== false;
 }
+
+/**
+ * Does this slide composite a client product?
+ *
+ * Asked by the product picker, by the copy generator (so the piece is ABOUT the
+ * product rather than merely showing it) and by the export gate. Unknown slugs
+ * answer `false`: an unresolvable template should not invent a requirement that
+ * blocks the export forever.
+ */
+export function templateUsesProduct(templateSlug: string): boolean {
+  return getTemplate(templateSlug)?.usesProduct === true;
+}
+
+/** Templates that composite a product, for the "what can I use this photo in" question. */
+export const PRODUCT_TEMPLATES = TEMPLATES.filter((t) => t.usesProduct === true);

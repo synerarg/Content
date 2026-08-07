@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { TemplateGallery } from "@/components/templates/template-gallery";
 import { typographySchema, defaultBrandFormValues } from "@/lib/schemas/brand";
+import { productRowToProduct } from "@/lib/schemas/product";
 import type { EditorBrand } from "@/lib/render/use-render-assets";
 
 export const metadata: Metadata = {
@@ -19,7 +20,7 @@ export default async function PlantillasPage() {
   const { data } = await supabase
     .from("brands")
     .select(
-      "id, name, palette, typography, logo_path, brand_fonts(family, weight, style, storage_path)",
+      "id, name, palette, typography, logo_path, brand_fonts(family, weight, style, storage_path), brand_products(id, name, description, image_path, has_transparency)",
     )
     .order("name")
     .limit(1)
@@ -48,6 +49,7 @@ export default async function PlantillasPage() {
         : defaultBrandFormValues().typography,
       logo_path: data.logo_path,
       fonts: data.brand_fonts ?? [],
+      products: (data.brand_products ?? []).map(productRowToProduct),
     };
   }
 

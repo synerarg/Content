@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
-import { Copy, Download, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { Copy, Download, Loader2, Package } from "lucide-react";
 import { toast } from "sonner";
 import { OffscreenSlide, SlidePreview } from "@/components/render/slide-canvas";
 import {
@@ -13,6 +14,7 @@ import {
   useRenderAssets,
   type EditorBrand,
 } from "@/lib/render/use-render-assets";
+import { useProductAssets } from "@/lib/render/use-product-assets";
 import {
   downloadBlob,
   rasterizeSlide,
@@ -55,6 +57,7 @@ export function SlideEditor({ brands }: { brands: EditorBrand[] }) {
   const [hashtags, setHashtags] = useState("");
   const [brief, setBrief] = useState("");
   const [backgroundUrl, setBackgroundUrl] = useState<string | null>(null);
+  const [productId, setProductId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
   const exportRef = useRef<HTMLDivElement>(null);
@@ -62,6 +65,31 @@ export function SlideEditor({ brands }: { brands: EditorBrand[] }) {
   const brand = brands.find((b) => b.id === brandId) ?? brands[0];
   const template = getTemplate(templateSlug) ?? TEMPLATES[0];
   const { brandTokens, fontCss, ready, error } = useRenderAssets(brand);
+
+  // Memoised because it feeds an effect's dependency list: `brand?.products ?? []`
+  // is a fresh array on every render whenever `brand` is undefined, which would
+  // re-run the auto-select effect and the blob-URL conversion forever.
+  const products = useMemo(() => brand?.products ?? [], [brand]);
+  const { byId: productAssets } = useProductAssets(products);
+
+  const needsProduct = template.usesProduct === true;
+  const product = productId ? (productAssets[productId] ?? null) : null;
+  const selected = products.find((item) => item.id === productId) ?? null;
+
+  /*
+    Pick the first product automatically when a product template is chosen.
+
+    Most brands here have one or two products, and landing on a template whose
+    whole subject is the product with an empty dashed box in the middle reads as
+    broken rather than as a choice to make. Only fills a NULL selection, so it
+    never overrides a deliberate pick, and clears itself when the brand changes
+    so one client's product cannot appear on another's piece.
+  */
+  useEffect(() => {
+    if (!needsProduct) return;
+    if (productId && products.some((item) => item.id === productId)) return;
+    setProductId(products[0]?.id ?? null);
+  }, [needsProduct, productId, products]);
 
   const slots = useMemo(
     () => ({ ...emptySlots(template), ...slotValues }),
@@ -115,6 +143,14 @@ export function SlideEditor({ brands }: { brands: EditorBrand[] }) {
 
     if (!ready) {
       toast.error("Las tipografías todavía se están cargando.");
+      return;
+    }
+
+    // The same gate the batch ZIP applies: a product template with no product
+    // rasterizes perfectly happily, into a PNG with a dashed box where the
+    // product should be. That is the kind of file that reaches a client.
+    if (needsProduct && !product) {
+      toast.error("Elegí un producto antes de exportar esta plantilla.");
       return;
     }
 
@@ -238,6 +274,72 @@ export function SlideEditor({ brands }: { brands: EditorBrand[] }) {
 
         <p className="text-sm text-muted-foreground">{template.description}</p>
 
+        {needsProduct ? (
+          <div className="space-y-2">
+            <Label>Producto</Label>
+
+            {products.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border px-4 py-4 text-sm text-muted-foreground">
+                Esta marca todavía no tiene productos cargados.{" "}
+                {brand ? (
+                  <Link
+                    href={`/marcas/${brand.id}/productos`}
+                    className="text-[var(--synera-accent)] underline underline-offset-4"
+                  >
+                    Cargá uno
+                  </Link>
+                ) : null}{" "}
+                para usar esta plantilla.
+              </div>
+            ) : (
+              <>
+                <Select
+                  value={productId ?? ""}
+                  onValueChange={(next) => setProductId(next)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Elegí un producto" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {products.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.name}
+                        {item.hasTransparency ? "" : " · sin recortar"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/*
+                  Said here rather than discovered in the preview. The piece is
+                  still perfectly usable — the template frames an opaque photo
+                  on purpose — but the difference between the two looks is large
+                  and it is worth one line to explain which one you are getting.
+                */}
+                {template.requiresCutout && selected && !selected.hasTransparency ? (
+                  <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                    <Package className="mt-0.5 size-3.5 shrink-0" />
+                    Esta foto no tiene el fondo recortado, así que se muestra
+                    enmarcada en vez de apoyada sobre la escena. Para que flote,
+                    recortala desde{" "}
+                    {brand ? (
+                      <Link
+                        href={`/marcas/${brand.id}/productos`}
+                        className="underline underline-offset-4"
+                      >
+                        Productos
+                      </Link>
+                    ) : (
+                      "Productos"
+                    )}
+                    .
+                  </p>
+                ) : null}
+              </>
+            )}
+          </div>
+        ) : null}
+
         <div className="space-y-4">
           {Object.keys(emptySlots(template)).map((key) => (
             <div key={key} className="space-y-2">
@@ -350,6 +452,7 @@ export function SlideEditor({ brands }: { brands: EditorBrand[] }) {
                 format={format}
                 brand={brandTokens}
                 backgroundUrl={backgroundUrl}
+                product={product}
                 fontCss={fontCss}
               />
             </div>
@@ -362,12 +465,13 @@ export function SlideEditor({ brands }: { brands: EditorBrand[] }) {
               format={format}
               brand={brandTokens}
               backgroundUrl={backgroundUrl}
+              product={product}
               fontCss={fontCss}
             />
 
             <Button
               onClick={handleExport}
-              disabled={exporting || !ready}
+              disabled={exporting || !ready || (needsProduct && !product)}
               className="w-full"
             >
               {exporting ? (

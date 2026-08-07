@@ -2,7 +2,12 @@
 
 import { paletteToCssVars } from "@/lib/render/brand-tokens";
 import type { AnyTemplateDefinition } from "@/templates/registry";
-import { FORMATS, type BrandTokens, type FormatKey } from "@/templates/types";
+import {
+  FORMATS,
+  type BrandTokens,
+  type FormatKey,
+  type ProductAsset,
+} from "@/templates/types";
 
 export type SlideCanvasProps = {
   ref?: React.Ref<HTMLDivElement>;
@@ -11,6 +16,8 @@ export type SlideCanvasProps = {
   format: FormatKey;
   brand: BrandTokens;
   backgroundUrl: string | null;
+  /** The client's product, already converted to a blob URL. Null renders a placeholder. */
+  product?: ProductAsset | null;
   /** Self-contained @font-face rules. Also passed to the rasterizer. */
   fontCss: string;
 };
@@ -30,6 +37,7 @@ export function SlideCanvas({
   format,
   brand,
   backgroundUrl,
+  product = null,
   fontCss,
 }: SlideCanvasProps) {
   const spec = FORMATS[format];
@@ -57,6 +65,7 @@ export function SlideCanvas({
         format={format}
         brand={brand}
         backgroundUrl={backgroundUrl}
+        product={product}
       />
     </div>
   );

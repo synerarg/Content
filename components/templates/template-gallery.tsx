@@ -6,6 +6,7 @@ import {
   useRenderAssets,
   type EditorBrand,
 } from "@/lib/render/use-render-assets";
+import { useProductAssets } from "@/lib/render/use-product-assets";
 import { TEMPLATES, TEMPLATE_SAMPLES, emptySlots } from "@/templates/registry";
 import { FORMATS, type BrandTokens } from "@/templates/types";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,12 @@ export function TemplateGallery({ brand }: { brand: EditorBrand | null }) {
   const { brandTokens, fontCss } = useRenderAssets(brand);
   const tokens = brandTokens ?? NEUTRAL_TOKENS;
 
+  // The gallery's whole job is showing what a template looks like filled in, so
+  // a product template previewed with an empty staging box would misrepresent
+  // it. Any product does — this is a sample, not a piece.
+  const { byId: productAssets } = useProductAssets(brand?.products ?? []);
+  const sampleProduct = Object.values(productAssets)[0] ?? null;
+
   return (
     <div className="grid gap-8 px-6 py-8 sm:grid-cols-2 lg:grid-cols-3 md:px-8">
       {TEMPLATES.map((template) => (
@@ -44,6 +51,7 @@ export function TemplateGallery({ brand }: { brand: EditorBrand | null }) {
               format="feed"
               brand={tokens}
               backgroundUrl={null}
+              product={template.usesProduct ? sampleProduct : null}
               fontCss={fontCss}
             />
           </div>

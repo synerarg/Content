@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { buildEmbeddedFontCss, type BrandFontRow } from "@/lib/render/brand-tokens";
 import { toObjectUrl } from "@/lib/export/rasterize";
 import { publicAssetUrl } from "@/lib/storage";
+import type { BrandProduct } from "@/lib/schemas/product";
 import type { BrandTokens } from "@/templates/types";
 
 export type EditorBrand = {
@@ -16,6 +17,11 @@ export type EditorBrand = {
   };
   logo_path: string | null;
   fonts: BrandFontRow[];
+  /**
+   * Products available to composite. Loaded with the brand rather than fetched
+   * per template, so switching to a product template does not stall on a query.
+   */
+  products: BrandProduct[];
 };
 
 export type RenderAssets = {

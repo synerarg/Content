@@ -33,6 +33,45 @@ export async function updateSlideSlots(
   return { ok: true };
 }
 
+/**
+ * Point one slide at a different product.
+ *
+ * Deliberately does NOT revalidate. This is called from the batch page while
+ * every background on screen is held as a blob URL keyed by slide id; a
+ * revalidate hands `BatchDetail` a fresh `initialPosts` identity, which re-runs
+ * the effect that owns those URLs. Same trap as the queue's per-slide writes,
+ * documented in HANDOFF §7. The browser already has the new value — it is what
+ * sent it — so there is nothing to re-fetch.
+ */
+export async function setSlideProduct(
+  slideId: string,
+  productId: string | null,
+): Promise<ActionResult> {
+  if (productId !== null && !z.uuid().safeParse(productId).success) {
+    return { ok: false, error: "Producto inválido." };
+  }
+
+  const supabase = await createClient();
+  /*
+    RLS covers the slide. It does NOT check that the product belongs to the
+    same brand — slides do not carry brand_id (see migration 0013) — so the
+    guarantee here is workspace isolation, not brand isolation: the worst a
+    hand-crafted request achieves is putting one of YOUR OWN products on one of
+    YOUR OWN slides.
+  */
+  const { data, error } = await supabase
+    .from("slides")
+    .update({ product_id: productId })
+    .eq("id", slideId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) return { ok: false, error: error.message };
+  if (!data) return { ok: false, error: "No se encontró la placa." };
+
+  return { ok: true };
+}
+
 const postPatchSchema = z.object({
   caption: z.string().max(2200).optional(),
   hashtags: z.array(z.string().max(60)).max(30).optional(),
@@ -465,7 +504,7 @@ export async function duplicateBatch(
       .select(
         `id, title, brief, brand_id,
          posts (id, position, type, caption, hashtags, cta,
-                slides (position, template_slug, format, slots, background_path,
+                slides (position, template_slug, format, slots, product_id, background_path,
                         background_status, generation_params))`,
       )
       .eq("id", batchId)
@@ -526,6 +565,7 @@ export async function duplicateBatch(
           template_slug: slide.template_slug,
           format: slide.format,
           slots: slide.slots as never,
+          product_id: slide.product_id,
           background_path: slide.background_path,
           // Kept in step with the path: the `slides_ready_has_path` constraint
           // rejects a 'ready' row with no background, and a copied slide that
@@ -567,7 +607,7 @@ export async function duplicatePost(
       .from("posts")
       .select(
         `id, batch_id, type, caption, hashtags, cta,
-         slides (position, template_slug, format, slots, background_path,
+         slides (position, template_slug, format, slots, product_id, background_path,
                  background_status, generation_params)`,
       )
       .eq("id", postId)
@@ -611,6 +651,7 @@ export async function duplicatePost(
       template_slug: slide.template_slug,
       format: slide.format,
       slots: slide.slots as never,
+      product_id: slide.product_id,
       background_path: slide.background_path,
       background_status: slide.background_path
         ? ("ready" as const)
