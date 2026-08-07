@@ -15,7 +15,9 @@
     "verify:schedule": "tsx --require ./scripts/_stub-server-only.cjs scripts/verify-schedule.ts",
     "probe:scene-ref": "tsx scripts/probe-gemini-reference.ts",
     "probe:variants": "tsx --require ./scripts/_stub-server-only.cjs scripts/probe-variants.ts",
-    "verify:legibility": "tsx --require ./scripts/_stub-server-only.cjs scripts/verify-legibility.ts"
+    "verify:legibility": "tsx --require ./scripts/_stub-server-only.cjs scripts/verify-legibility.ts",
+    "verify:website": "tsx --require ./scripts/_stub-server-only.cjs scripts/verify-website.ts",
+    "probe:website": "tsx --require ./scripts/_stub-server-only.cjs scripts/probe-website.ts"
   },
   "overrides": {
     "postcss": "^8.5.25",

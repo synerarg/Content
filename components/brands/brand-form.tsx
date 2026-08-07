@@ -11,6 +11,7 @@ import { PaletteEditor } from "@/components/brands/palette-editor";
 import { TypographyPicker } from "@/components/brands/typography-picker";
 import { LogoUpload } from "@/components/brands/logo-upload";
 import { StringListInput } from "@/components/brands/string-list-input";
+import { ImportFromSite } from "@/components/brands/import-from-site";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -58,11 +59,25 @@ export function BrandForm({
     register,
     control,
     handleSubmit,
+    getValues,
+    reset,
     formState: { errors },
   } = useForm<BrandFormValues>({
     resolver: zodResolver(brandFormSchema),
     defaultValues: initialValues,
   });
+
+  /*
+    Merged over whatever is on screen, not substituted for it.
+
+    Someone who typed a name and then pasted a URL should keep their name.
+    `reset` rather than a stream of `setValue` calls because the palette is a
+    field array — setting it field by field leaves the array's internal keys
+    stale and the editor renders the old rows.
+  */
+  function applyDraft(draft: Partial<BrandFormValues>) {
+    reset({ ...getValues(), ...draft }, { keepDefaultValues: true });
+  }
 
   async function onSubmit(values: BrandFormValues) {
     setPending(true);
@@ -97,6 +112,14 @@ export function BrandForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="px-6 pb-16 md:px-8">
+      {/* Only when creating: re-reading a site over an established kit would
+          overwrite decisions someone already made. */}
+      {mode === "create" ? (
+        <div className="pt-8">
+          <ImportFromSite onDraft={applyDraft} />
+        </div>
+      ) : null}
+
       <Section
         title="Identidad"
         description="Cómo se llama la marca y su logo."
