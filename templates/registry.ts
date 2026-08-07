@@ -5,6 +5,8 @@ import { ListTips, listTipsSlots } from "./list-tips";
 import { CarouselCover, carouselCoverSlots } from "./carousel-cover";
 import { CarouselBody, carouselBodySlots } from "./carousel-body";
 import { StoryCta, storyCtaSlots } from "./story-cta";
+import { EditorialSplit, editorialSplitSlots } from "./editorial-split";
+import { Statement, statementSlots } from "./statement";
 import type { FormatKey, TemplateProps, TemplateRole } from "./types";
 
 /**
@@ -33,6 +35,16 @@ export type AnyTemplateDefinition = {
    */
   slotLabels: Record<string, string>;
   slotHints: Record<string, string>;
+  /**
+   * Whether this template renders a generated background at all.
+   *
+   * Defaults to true. A template that ignores `backgroundUrl` — a purely
+   * typographic card — must say so, or the queue spends a paid image and 10-20
+   * seconds producing something nothing will ever display. It also changes what
+   * "complete" means: the export must not block on a missing background for a
+   * slide that was never going to have one.
+   */
+  usesBackground?: boolean;
   /**
    * Rendering is inherently dynamic — the slug is only known at runtime — so
    * the props type is widened here. Slot values are validated against `slots`
@@ -127,6 +139,48 @@ export const TEMPLATES: AnyTemplateDefinition[] = [
     component: StoryCta,
   },
   {
+    slug: "editorial-split",
+    name: "Editorial partida",
+    description:
+      "La foto ocupa una banda y el texto va sobre color plano. Para cuando la imagen acompaña en vez de protagonizar.",
+    role: "single",
+    formats: ["feed", "story"],
+    slots: editorialSplitSlots,
+    slotLabels: {
+      eyebrow: "Etiqueta",
+      headline: "Titular",
+      subline: "Bajada",
+    },
+    slotHints: {
+      eyebrow:
+        "Dos o tres palabras que categorizan la pieza: 'Caso real', 'Guía', 'Novedad'. Opcional.",
+      headline: "El titular. Acá entra más texto que en las placas con foto a sangre.",
+      subline: "El desarrollo, en una o dos líneas. Opcional.",
+    },
+    component: EditorialSplit,
+  },
+  {
+    slug: "statement",
+    name: "Frase sin foto",
+    description:
+      "Sólo tipografía sobre el color de la marca. La más rápida y la que nunca parece generada.",
+    role: "single",
+    formats: ["feed", "story"],
+    slots: statementSlots,
+    // No image: the queue skips it, and the export never waits for one.
+    usesBackground: false,
+    slotLabels: {
+      statement: "La frase",
+      attribution: "Atribución",
+    },
+    slotHints: {
+      statement:
+        "La idea entera, sin apoyo visual. Tiene que sostenerse sola: cuanto más corta, más grande se ve.",
+      attribution: "Quién lo dice, o de dónde sale el dato. Opcional.",
+    },
+    component: Statement,
+  },
+  {
     slug: "carousel-cover",
     name: "Carrusel · tapa",
     description:
@@ -219,6 +273,15 @@ export const TEMPLATE_SAMPLES: Record<string, Record<string, string>> = {
     subline: "Contanos tu caso y te mostramos por dónde empezar.",
     cta: "Escribinos por DM",
   },
+  "editorial-split": {
+    eyebrow: "Caso real",
+    headline: "Pasaron de tres planillas a una sola pantalla",
+    subline: "Y el seguimiento dejó de depender de que alguien se acuerde.",
+  },
+  statement: {
+    statement: "Si tenés que abrir tres planillas para saber cuánto facturaste, no tenés un sistema: tenés un problema.",
+    attribution: "Synera",
+  },
   "carousel-cover": {
     headline: "Cinco cosas que tu pyme deja de perder con un CRM",
     subline: "Ninguna tiene que ver con la tecnología.",
@@ -301,4 +364,16 @@ export function isSlideTextComplete(
   const template = getTemplate(templateSlug);
   if (!template) return false;
   return requiredSlots(template).every((key) => (slots[key] ?? "").trim().length > 0);
+}
+
+/**
+ * Does this slide need a generated background?
+ *
+ * The queue asks before spending an image, and the export gate asks before
+ * blocking on a missing one. Unknown slugs answer `true`: a template that
+ * cannot be resolved should be treated as needing everything, not as needing
+ * nothing.
+ */
+export function templateUsesBackground(templateSlug: string): boolean {
+  return getTemplate(templateSlug)?.usesBackground !== false;
 }

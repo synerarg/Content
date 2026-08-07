@@ -1,5 +1,6 @@
 import "server-only";
 
+import { CodedError } from "@/lib/errors";
 import {
   DEFAULT_RETRY_AFTER_MS,
   megapixelsOf,
@@ -109,11 +110,25 @@ export class GeminiImageProvider implements ImageProvider {
     const raw = await response.text();
 
     if (!response.ok) {
-      // Rate limiting is a wait, not a failure — the queue needs to tell them
-      // apart, so it gets its own error type carrying how long to hold off.
+      /*
+        Gemini answers 429 for two conditions that need opposite responses:
+        a per-minute rate limit (wait, then continue) and depleted credits
+        (waiting is useless, the account needs money). Treating both as a rate
+        limit made the queue back off 31s and retry five times per slide before
+        failing — twenty minutes of nothing on a batch of eight — while telling
+        the user to wait a few seconds.
+
+        Observed message: "Your prepayment credits are depleted."
+      */
       if (response.status === 429) {
+        const message = describeGeminiError(response.status, raw);
+
+        if (/prepayment credits|credits are depleted|billing/i.test(raw)) {
+          throw new CodedError("billing", message);
+        }
+
         throw new RateLimitError(
-          describeGeminiError(response.status, raw),
+          message,
           parseRetryAfterMs(raw) ??
             retryAfterFromHeader(response) ??
             DEFAULT_RETRY_AFTER_MS,
@@ -186,8 +201,12 @@ function describeGeminiError(status: number, raw: string): string {
     const parsed = JSON.parse(raw) as InteractionResponse;
     const message = parsed.error?.message;
     if (message) {
-      if (status === 429) {
-        return `Límite de la capa gratuita alcanzado: ${message}`;
+      // Only prefix when it really is a rate limit. The same status also
+      // carries billing failures, and "Límite de la capa gratuita alcanzado:
+      // Your prepayment credits are depleted" is a contradiction that sends
+      // whoever reads the log looking in the wrong place.
+      if (status === 429 && !/credits|billing/i.test(message)) {
+        return `Límite de uso alcanzado: ${message}`;
       }
       return message;
     }

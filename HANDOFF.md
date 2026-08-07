@@ -355,6 +355,15 @@ loss: you sign in with Google and every brand is gone. The fix is the "link iden
 with the same email" setting plus confirming the original account's address — **not**
 recreating the brands. `DEPLOY.md` §4.5.
 
+**Gemini answers 429 for BOTH a rate limit and an empty account.** The messages are
+"quota exceeded…" and "Your prepayment credits are depleted." — same status, opposite
+correct responses. Treating them alike made the queue back off 31s and retry five times
+per slide before failing (twenty minutes on a batch of eight) while telling the user to
+"esperá unos segundos", for a condition waiting never clears. Both providers now raise
+`CodedError("billing", …)` for it, which is not retryable. **In `guessClass` the billing
+patterns are tested BEFORE the rate-limit ones on purpose**: Google's depleted-credits
+message also contains the word "quota", so whichever runs first wins.
+
 **Supabase IGNORES a redirect URL that is not allow-listed — it does not reject it.** It
 falls back to the Site URL instead, silently. `login-form.tsx` passes a correct
 `emailRedirectTo` built from `window.location.origin`, and signup confirmation emails
@@ -583,6 +592,38 @@ outputs, which is what makes typed template slots work and what lets a new templ
 the prompt its own limits. Partial JSON cannot be rendered as copy. Streaming *state*
 ("escribiendo la pieza 2 de 5") is possible; streaming the text is not, without giving up
 the schema.
+
+### Design quality: why the output looked generated (Phase 8, in progress)
+
+The complaint was that the slides look like "AI slop". Three separate causes, in three
+different files:
+
+1. **Four of the six background templates had no composition guidance at all.**
+   `COMPOSITION_BY_TEMPLATE` in `prompts/image-prompt.ts` covered only `bold-headline` and
+   `quote-card`. For the rest the model composed freely and the type landed over whatever
+   detail happened to be there. Every background template now has an entry, and a probe
+   asserts that — `templates that use a background but produce no "Composition:"` must be
+   an empty list.
+2. **All six templates were the same idea** — full-bleed photo, gradient scrim, type
+   bottom-left. Six variations of one composition read as one template. Added
+   `editorial-split` (the photo is a cropped band, type on a solid brand field, no scrim)
+   and `statement` (no photograph at all).
+3. **Fixed type sizes regardless of copy length.** 88px whether the headline was 20 or 90
+   characters, which is what produces the "text poured into a box" look.
+   `lib/render/fit-text.ts` interpolates by length, with line height tightening as size
+   grows. A lookup, not a measurement — measuring would mean a layout round trip inside
+   html-to-image's `<foreignObject>`, which is the one place this project cannot afford
+   extra moving parts.
+
+**`usesBackground: false` on a template is load-bearing**, not decorative. Without it the
+queue spends a paid image and 10-20s on a slide that renders none, the export gate blocks
+forever waiting for a background that will never arrive, and the progress bar never
+reaches 100%. All three read the flag through `templateUsesBackground()`; a new
+type-only template must set it.
+
+**Not yet verified:** the new image prompt has never run against the provider — the Gemini
+account ran out of credit first. The before/after comparison is still owed, and the two
+new templates have not been looked at by anyone.
 
 ### Where published content comes from
 

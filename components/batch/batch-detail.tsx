@@ -50,6 +50,7 @@ import {
   isSlideTextComplete,
   isSlotRequired,
   slotLabel,
+  templateUsesBackground,
 } from "@/templates/registry";
 import { FORMATS, type FormatKey } from "@/templates/types";
 import { notifyError } from "@/lib/notify";
@@ -185,8 +186,15 @@ export function BatchDetail({
   }
 
   async function runQueue(slides: BatchSlide[]) {
-    const runnable = slides.filter((slide) => slide.backgroundBrief.trim());
-    const skipped = slides.length - runnable.length;
+    // A template that never displays a background must not be sent to the
+    // queue: it would cost a paid image and 10-20 seconds for something nothing
+    // renders. Filtered before the brief check so a typographic slide with no
+    // scene does not get reported as a problem — it isn't one.
+    const needsBackground = slides.filter((slide) =>
+      templateUsesBackground(slide.templateSlug),
+    );
+    const runnable = needsBackground.filter((slide) => slide.backgroundBrief.trim());
+    const skipped = needsBackground.length - runnable.length;
 
     if (runnable.length === 0) {
       toast.error("Ninguna de estas placas tiene descripción de escena.");
@@ -453,9 +461,12 @@ export function BatchDetail({
     notices, so the button says what is missing instead of letting it through.
   */
   const incomplete = allSlides.filter((slide) => {
+    if (!isSlideTextComplete(slide.templateSlug, slide.slots)) return true;
+    // A template that does not use one is complete without it.
+    if (!templateUsesBackground(slide.templateSlug)) return false;
+
     const status = queue.states[slide.id]?.status ?? slide.backgroundStatus;
-    const hasBackground = status === "ready" || Boolean(backgrounds[slide.id]);
-    return !hasBackground || !isSlideTextComplete(slide.templateSlug, slide.slots);
+    return !(status === "ready" || Boolean(backgrounds[slide.id]));
   });
 
   const exportBlockedReason =
@@ -618,14 +629,19 @@ export function BatchDetail({
       ) : null}
 
       <QueueProgress
-        states={allSlides.map(
-          (slide) =>
-            queue.states[slide.id] ?? {
-              status: slide.backgroundStatus,
-              error: slide.backgroundError,
-              attempts: slide.backgroundAttempts,
-            },
-        )}
+        // Only slides that actually take a background are counted. Including a
+        // purely typographic one would leave the bar permanently short of 100%
+        // and the count reading "5/8 listos" on a batch with nothing left to do.
+        states={allSlides
+          .filter((slide) => templateUsesBackground(slide.templateSlug))
+          .map(
+            (slide) =>
+              queue.states[slide.id] ?? {
+                status: slide.backgroundStatus,
+                error: slide.backgroundError,
+                attempts: slide.backgroundAttempts,
+              },
+          )}
         running={queue.running}
         waitingUntil={queue.waitingUntil}
         etaMs={queue.etaMs}
@@ -710,18 +726,27 @@ export function BatchDetail({
                       />
                     </div>
 
-                    <div className="flex items-center justify-between gap-2">
-                      <SlideStatusChip state={state} />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => regenerateOne(slide)}
-                        disabled={queue.running || busy}
-                      >
-                        <RefreshCw className="size-4" />
-                        {state.status === "ready" ? "Regenerar" : "Generar"}
-                      </Button>
-                    </div>
+                    {/* A typographic template has no background to generate,
+                        so it gets no status chip and no generate button —
+                        controls for something that will never happen. */}
+                    {templateUsesBackground(slide.templateSlug) ? (
+                      <div className="flex items-center justify-between gap-2">
+                        <SlideStatusChip state={state} />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => regenerateOne(slide)}
+                          disabled={queue.running || busy}
+                        >
+                          <RefreshCw className="size-4" />
+                          {state.status === "ready" ? "Regenerar" : "Generar"}
+                        </Button>
+                      </div>
+                    ) : (
+                      <p className="px-2 text-[11px] text-muted-foreground">
+                        Sin fondo generado — esta plantilla es sólo tipografía.
+                      </p>
+                    )}
 
                     {/*
                       Progressive disclosure: the scene brief and the seed are

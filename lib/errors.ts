@@ -14,6 +14,7 @@
 
 export type ErrorClass =
   | "rate_limit"
+  | "billing"
   | "safety"
   | "network"
   | "provider"
@@ -67,8 +68,22 @@ const BY_CLASS: Record<ErrorClass, Omit<DescribedError, "cls">> = {
   rate_limit: {
     title: "El proveedor nos frenó por límite de uso",
     description:
-      "Es la cuota gratuita, no un error. Esperá unos segundos y seguí; la cola lo hace sola.",
+      "Es la cuota por minuto, no un error. Esperá unos segundos y seguí; la cola lo hace sola.",
     retryable: true,
+  },
+  /*
+    Separada de `rate_limit` aunque el proveedor devuelva 429 en los dos casos.
+
+    Tratarlas igual fue un error real: la cola esperaba 31 s y reintentaba cinco
+    veces por placa — veinte minutos para un lote de ocho — por algo que
+    esperando no se resuelve nunca, y encima le decía al usuario "esperá unos
+    segundos". Sin crédito hay que cargar crédito; es la única salida.
+  */
+  billing: {
+    title: "El proveedor se quedó sin crédito",
+    description:
+      "No es un límite de uso: la cuenta no tiene saldo. Cargá crédito en el proveedor de imágenes y volvé a intentar. Reintentar ahora va a fallar igual.",
+    retryable: false,
   },
   safety: {
     title: "El proveedor rechazó el pedido",
@@ -121,6 +136,22 @@ const BY_CLASS: Record<ErrorClass, Omit<DescribedError, "cls">> = {
 function guessClass(message: string): ErrorClass {
   const m = message.toLowerCase();
 
+  /*
+    Billing is checked BEFORE rate limiting, and the order is load-bearing:
+    Gemini answers 429 for both, and its depleted-credits message also contains
+    the word "quota". Whichever is tested first wins, and getting it backwards
+    tells the user to wait for something that will never clear.
+
+    Both strings below are verbatim from real responses — Google's
+    "prepayment credits are depleted" and fal's "Exhausted balance".
+  */
+  if (
+    /prepayment credits|credits are depleted|exhausted balance|insufficient (funds|credit|balance)|billing/.test(
+      m,
+    )
+  ) {
+    return "billing";
+  }
   if (/l[íi]mite de la capa gratuita|rate limit|429|quota|too many requests/.test(m)) {
     return "rate_limit";
   }
@@ -134,7 +165,7 @@ function guessClass(message: string): ErrorClass {
   if (/max_tokens|se cort[óo] por l[íi]mite de tokens|too long/.test(m)) {
     return "too_long";
   }
-  if (/exhausted balance|insufficient|billing|saturad|503|502|500/.test(m)) {
+  if (/saturad|503|502|500/.test(m)) {
     return "provider";
   }
   return "unknown";

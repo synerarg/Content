@@ -1,6 +1,7 @@
 import "server-only";
 
 import { fal } from "@fal-ai/client";
+import { CodedError } from "@/lib/errors";
 import {
   DEFAULT_RETRY_AFTER_MS,
   megapixelsOf,
@@ -80,12 +81,21 @@ export class FalFluxProvider implements ImageProvider {
         },
       });
     } catch (cause) {
-      // Same distinction Gemini gets: a 429 is a wait, so the queue can pace
-      // itself instead of marking the slide failed. fal sends no retry hint.
-      if ((cause as { status?: number })?.status === 429) {
-        throw new RateLimitError(describeFalError(cause), DEFAULT_RETRY_AFTER_MS);
+      const message = describeFalError(cause);
+
+      // fal reports an empty account as a 403 with "User is locked. Reason:
+      // Exhausted balance" in body.detail — the same condition Gemini reports
+      // as a 429. Same class either way: waiting does not fix it.
+      if (/exhausted balance|insufficient|billing/i.test(message)) {
+        throw new CodedError("billing", message);
       }
-      throw new Error(describeFalError(cause));
+
+      // A 429 is a wait, so the queue can pace itself instead of marking the
+      // slide failed. fal sends no retry hint.
+      if ((cause as { status?: number })?.status === 429) {
+        throw new RateLimitError(message, DEFAULT_RETRY_AFTER_MS);
+      }
+      throw new Error(message);
     }
 
     const data = result.data as FalOutput;

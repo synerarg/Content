@@ -6,7 +6,13 @@ import type { FormatKey } from "@/templates/types";
  * Versioned like the text prompt, and recorded on every `generations` row so a
  * change in output can be traced to the wording that caused it.
  */
-export const IMAGE_PROMPT_VERSION = "2026-08-05.1";
+/*
+  2026-08-07.1 — composition guidance for every background template (four had
+  none), plus a photographic-craft and anti-cliché block. Untested against the
+  provider: the Gemini account ran out of credit before a before/after could be
+  run. The comparison is still owed.
+*/
+export const IMAGE_PROMPT_VERSION = "2026-08-07.1";
 
 export type ArtDirection = {
   photographic_style: string;
@@ -41,13 +47,49 @@ const NO_TEXT_DIRECTIVE = [
   "Clean photographic background only.",
 ].join(" ");
 
-/** Where the template will place type, so the image leaves room for it. */
+/*
+  Where the template will place type, so the image leaves room for it.
+
+  EVERY template that uses a background needs an entry. Four of them had none
+  for a long time — list-tips, story-cta and both carousel roles — which meant
+  the model composed freely and the type landed wherever it landed, usually over
+  the busiest part of the frame. That, more than the model's quality, is what
+  made those pieces look thrown together.
+
+  A template that does not use a background (`usesBackground: false`) correctly
+  has no entry here and never reaches this code.
+*/
 const COMPOSITION_BY_TEMPLATE: Record<string, string> = {
   "bold-headline":
     "Composition: the subject sits in the upper two thirds. The lower third is visually calm and uncluttered — soft gradient, shadow or shallow depth of field — so overlaid type stays readable. Leave clear negative space at the bottom.",
   "quote-card":
     "Composition: atmospheric and low-contrast overall, with no busy detail in the centre. The image reads as texture behind type rather than as the subject itself.",
+  "list-tips":
+    "Composition: the subject is pushed to one side and the opposite two thirds are quiet and even in tone — a wall, a surface, soft falloff — because a stacked list of three points will sit there. No detail crossing the middle of the frame.",
+  "story-cta":
+    "Composition: the subject occupies the upper half only. The entire lower half is calm and darkening, with nothing the eye needs to read, because both the message and a call to action sit there above the thumb.",
+  "carousel-cover":
+    "Composition: bold and inviting, the strongest image of the set. Subject in the upper two thirds, the bottom third quiet for a headline and a swipe cue.",
+  "carousel-body":
+    "Composition: quieter and flatter than a cover — this frame supports a numbered point rather than leading. Even tone across the middle, subject off to one edge, generous empty space.",
+  "editorial-split":
+    "Composition: this image is CROPPED to a horizontal band, not shown whole. Put the subject dead centre and leave room on all four sides, because the top and bottom will be cut away. Nothing important near any edge.",
 };
+
+/*
+  What separates a photograph from a stock image.
+
+  Without this the model reliably produces the archetypal AI office photo:
+  symmetrical, evenly lit, a laptop and a coffee cup, someone smiling at the
+  camera. Naming the craft — lens, depth, imperfection — and naming the cliché to
+  avoid moves it toward something that looks shot rather than rendered.
+*/
+const CRAFT_DIRECTIVE = [
+  "Shot on a full-frame camera with a fast prime lens, shallow depth of field, natural imperfection in the framing.",
+  "Real textures and surfaces, visible material detail, honest colour rather than heavy saturation.",
+  "Avoid stock-photo clichés: no posed handshakes, no people smiling at the camera, no perfectly tidy desks,",
+  "no symmetrical corporate compositions, no floating objects, no 3D renders, no illustration.",
+].join(" ");
 
 const FORMAT_HINT: Record<FormatKey, string> = {
   feed: "Vertical 4:5 framing.",
@@ -81,7 +123,11 @@ export function composeImagePrompt({
     parts.push(`Colour: ${artDirection.palette_notes.trim()}.`);
   }
 
-  // 3. Composition, so the type has somewhere to live.
+  // 3. Photographic craft, before composition: it describes HOW the frame is
+  //    made, which the composition rules then place things within.
+  parts.push(CRAFT_DIRECTIVE);
+
+  // 4. Composition, so the type has somewhere to live.
   parts.push(FORMAT_HINT[format]);
   const composition = COMPOSITION_BY_TEMPLATE[templateSlug];
   if (composition) parts.push(composition);
