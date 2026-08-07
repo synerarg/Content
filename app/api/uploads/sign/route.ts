@@ -17,6 +17,12 @@ const BUCKET = "brand-assets";
 
 const LOGO_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "svg"]);
 const FONT_EXTENSIONS = new Set(["woff2"]);
+/*
+  No SVG for a product, unlike a logo: this is a photograph of a real object and
+  a vector file here means someone picked the wrong asset. The bucket's MIME
+  allowlist (migration 0007) is the second, independent check.
+*/
+const PRODUCT_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp"]);
 
 const requestSchema = z.discriminatedUnion("kind", [
   z.object({
@@ -30,7 +36,18 @@ const requestSchema = z.discriminatedUnion("kind", [
     family: z.string().trim().min(1).max(120),
     weight: z.coerce.number().int().min(100).max(900),
   }),
+  z.object({
+    kind: z.literal("product"),
+    filename: z.string().min(1).max(200),
+    brandId: z.uuid(),
+  }),
 ]);
+
+const EXTENSIONS_BY_KIND = {
+  logo: LOGO_EXTENSIONS,
+  font: FONT_EXTENSIONS,
+  product: PRODUCT_EXTENSIONS,
+} as const;
 
 function extensionOf(filename: string): string {
   return filename.split(".").pop()?.toLowerCase() ?? "";
@@ -52,7 +69,7 @@ export async function POST(request: Request) {
   const body = parsed.data;
   const extension = extensionOf(body.filename);
 
-  const allowed = body.kind === "logo" ? LOGO_EXTENSIONS : FONT_EXTENSIONS;
+  const allowed = EXTENSIONS_BY_KIND[body.kind];
   if (!allowed.has(extension)) {
     return NextResponse.json(
       { error: `Formato no permitido (.${extension}).` },
@@ -67,10 +84,19 @@ export async function POST(request: Request) {
     const workspaceId = await requireWorkspaceId();
     const supabase = await createClient();
 
+    /*
+      A product gets a fresh UUID on every upload instead of a stable per-product
+      name. Replacing a product photo in place would leave every already-exported
+      piece pointing at bytes that no longer match what was approved, and the
+      public bucket is CDN-cached besides. A new object costs nothing and keeps
+      the old one resolvable.
+    */
     const path =
       body.kind === "logo"
         ? `${workspaceId}/logos/${crypto.randomUUID()}.${extension}`
-        : `${workspaceId}/${body.brandId}/fonts/${slugify(body.family)}-${body.weight}-normal.woff2`;
+        : body.kind === "product"
+          ? `${workspaceId}/${body.brandId}/products/${crypto.randomUUID()}.${extension}`
+          : `${workspaceId}/${body.brandId}/fonts/${slugify(body.family)}-${body.weight}-normal.woff2`;
 
     const { data, error } = await supabase.storage
       .from(BUCKET)

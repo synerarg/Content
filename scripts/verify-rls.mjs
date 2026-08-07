@@ -20,6 +20,7 @@ const TENANT_TABLES = [
   "workspace_members",
   "brands",
   "brand_fonts",
+  "brand_products",
   "brand_published_posts",
   "generations",
   "content_batches",

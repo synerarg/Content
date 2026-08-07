@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { History } from "lucide-react";
+import { History, Package } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/app-shell/page-header";
 import { BrandForm } from "@/components/brands/brand-form";
@@ -61,12 +61,20 @@ export default async function EditarMarcaPage({
         title={brand.name}
         description="Los cambios se aplican al próximo contenido que generes con esta marca."
         action={
-          <Button asChild variant="outline">
-            <Link href={`/marcas/${brand.id}/historial`}>
-              <History className="size-4" />
-              Historial publicado
-            </Link>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline">
+              <Link href={`/marcas/${brand.id}/productos`}>
+                <Package className="size-4" />
+                Productos
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href={`/marcas/${brand.id}/historial`}>
+                <History className="size-4" />
+                Historial publicado
+              </Link>
+            </Button>
+          </div>
         }
       />
       <BrandForm

@@ -10,6 +10,7 @@ import {
 } from "@/lib/schemas/brand";
 import { syncGoogleFontsForBrand } from "@/lib/fonts/ingest";
 import { splitPastedCaptions } from "@/lib/history";
+import { productFormSchema } from "@/lib/schemas/product";
 
 export type ActionResult =
   | { ok: true; id: string; warning?: string }
@@ -302,8 +303,162 @@ export async function duplicateBrand(brandId: string): Promise<ActionResult> {
       );
     }
 
+    // Products come along, and share the original's image objects for the same
+    // reason and with the same caveat as the fonts above: safe inside one
+    // workspace, but deleting the original brand's folder would take the copy's
+    // photos with it.
+    const { data: products } = await supabase
+      .from("brand_products")
+      .select("name, description, image_path, has_transparency")
+      .eq("brand_id", brandId);
+
+    if (products && products.length > 0) {
+      await supabase.from("brand_products").insert(
+        products.map((product) => ({
+          ...product,
+          workspace_id: workspaceId,
+          brand_id: created.id,
+        })),
+      );
+    }
+
     revalidatePath("/marcas");
     return { ok: true, id: created.id };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Error inesperado.",
+    };
+  }
+}
+
+/*
+  ---------------------------------------------------------------------------
+  Products
+  ---------------------------------------------------------------------------
+
+  The client's actual product, photographed. The image model never draws it —
+  see migration 0013 for why — so these rows are what the template composites.
+
+  What none of these actions do is delete bytes from Storage. Product images are
+  written under a fresh UUID on every upload and are never overwritten, so a
+  deleted product leaves an orphaned object behind. That is deliberate: a
+  duplicated brand's products point at the ORIGINAL brand's paths, exactly like
+  its fonts do, and a delete that also removed the object would silently break
+  the copy. Orphaned bytes in a bucket capped at 2 MiB per object are the
+  cheaper problem.
+*/
+
+export type ProductActionResult =
+  | { ok: true; id: string }
+  | { ok: false; error: string };
+
+/** Postgres 23505 here can only be the per-brand product-name index. */
+function describeProductError(error: { code?: string; message: string }): string {
+  if (error.code === "23505") {
+    return "Ya hay un producto con ese nombre en esta marca.";
+  }
+  return error.message;
+}
+
+export async function createProduct(
+  brandId: string,
+  input: unknown,
+): Promise<ProductActionResult> {
+  const parsed = productFormSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
+  }
+
+  try {
+    const workspaceId = await requireWorkspaceId();
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+      .from("brand_products")
+      .insert({
+        workspace_id: workspaceId,
+        brand_id: brandId,
+        name: parsed.data.name,
+        description: parsed.data.description,
+        image_path: parsed.data.image_path,
+        has_transparency: parsed.data.has_transparency,
+      })
+      .select("id")
+      .single();
+
+    if (error) return { ok: false, error: describeProductError(error) };
+
+    revalidatePath(`/marcas/${brandId}/productos`);
+    return { ok: true, id: data.id };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Error inesperado.",
+    };
+  }
+}
+
+export async function updateProduct(
+  productId: string,
+  input: unknown,
+): Promise<ProductActionResult> {
+  const parsed = productFormSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
+  }
+
+  try {
+    const supabase = await createClient();
+
+    // No workspace filter: RLS restricts the update to the caller's rows, so a
+    // foreign id matches nothing rather than needing to be checked here.
+    const { data, error } = await supabase
+      .from("brand_products")
+      .update({
+        name: parsed.data.name,
+        description: parsed.data.description,
+        image_path: parsed.data.image_path,
+        has_transparency: parsed.data.has_transparency,
+      })
+      .eq("id", productId)
+      .select("id, brand_id")
+      .maybeSingle();
+
+    if (error) return { ok: false, error: describeProductError(error) };
+    if (!data) return { ok: false, error: "No se encontró el producto." };
+
+    revalidatePath(`/marcas/${data.brand_id}/productos`);
+    return { ok: true, id: data.id };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Error inesperado.",
+    };
+  }
+}
+
+export async function deleteProduct(
+  productId: string,
+): Promise<ProductActionResult> {
+  try {
+    const supabase = await createClient();
+
+    // Slides referencing this product have their product_id set to null by the
+    // foreign key (migration 0013): the piece keeps its copy and its background
+    // and simply stops showing a product.
+    const { data, error } = await supabase
+      .from("brand_products")
+      .delete()
+      .eq("id", productId)
+      .select("id, brand_id")
+      .maybeSingle();
+
+    if (error) return { ok: false, error: error.message };
+    if (!data) return { ok: false, error: "No se encontró el producto." };
+
+    revalidatePath(`/marcas/${data.brand_id}/productos`);
+    return { ok: true, id: data.id };
   } catch (error) {
     return {
       ok: false,

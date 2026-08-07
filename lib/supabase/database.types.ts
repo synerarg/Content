@@ -90,6 +90,57 @@ export type Database = {
           },
         ]
       }
+      brand_products: {
+        Row: {
+          brand_id: string
+          created_at: string
+          description: string
+          has_transparency: boolean
+          id: string
+          image_path: string
+          name: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          description?: string
+          has_transparency?: boolean
+          id?: string
+          image_path: string
+          name: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          description?: string
+          has_transparency?: boolean
+          id?: string
+          image_path?: string
+          name?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_products_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brand_products_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       brand_published_posts: {
         Row: {
           brand_id: string
@@ -447,6 +498,7 @@ export type Database = {
           id: string
           position: number
           post_id: string
+          product_id: string | null
           slots: Json
           template_slug: string
           updated_at: string
@@ -464,6 +516,7 @@ export type Database = {
           id?: string
           position?: number
           post_id: string
+          product_id?: string | null
           slots?: Json
           template_slug: string
           updated_at?: string
@@ -481,6 +534,7 @@ export type Database = {
           id?: string
           position?: number
           post_id?: string
+          product_id?: string | null
           slots?: Json
           template_slug?: string
           updated_at?: string
@@ -492,6 +546,13 @@ export type Database = {
             columns: ["post_id"]
             isOneToOne: false
             referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "slides_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "brand_products"
             referencedColumns: ["id"]
           },
           {

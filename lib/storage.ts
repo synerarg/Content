@@ -10,7 +10,8 @@ type SignRequest =
       brandId: string;
       family: string;
       weight: number;
-    };
+    }
+  | { kind: "product"; filename: string; brandId: string };
 
 /*
   The bucket enforces `allowed_mime_types` (migration 0007), and for a Blob body
