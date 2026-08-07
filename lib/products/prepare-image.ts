@@ -163,8 +163,12 @@ function distance(a: Rgb, b: Rgb): number {
  * it found nothing; removing 98% means it ate the product. In both cases this
  * returns a refusal and the caller keeps the original, because a silently
  * mangled product photo is far worse than one that was never cut out.
+ *
+ * Exported for `scripts/verify-products.ts`, which is the only way those guard
+ * rails get tested: everything around this function needs a canvas, but this
+ * one touches nothing but the `{width, height, data}` it is handed.
  */
-function removeFlatBackground(image: ImageData): CutoutOutcome {
+export function removeFlatBackground(image: ImageData): CutoutOutcome {
   const { width, height, data } = image;
   const total = width * height;
 

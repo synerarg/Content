@@ -4,6 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import {
+  PRODUCT_TEMPLATES,
   TEMPLATES,
   getTemplate,
   templatesByRole,
@@ -14,6 +15,7 @@ import {
   BATCH_PROMPT_VERSION,
   buildBatchSystemPrompt,
   buildBatchUserPrompt,
+  type BatchProduct,
   type UsedAngles,
 } from "@/prompts/batch-generation";
 import {
@@ -332,6 +334,8 @@ export async function generateBatch(input: {
   publishedHistory?: string[];
   /** Named angles/hooks to forbid, from analyzePublishedHistory(). */
   usedAngles?: UsedAngles;
+  /** The product this batch is about, if it has one. */
+  product?: BatchProduct;
 }): Promise<GenerateBatchResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -354,7 +358,17 @@ export async function generateBatch(input: {
           cache_control: { type: "ephemeral" },
         },
       ],
-      messages: [{ role: "user", content: buildBatchUserPrompt(input) }],
+      messages: [
+        {
+          role: "user",
+          content: buildBatchUserPrompt({
+            ...input,
+            // Read off the registry, so a new product template is taught to the
+            // prompt by existing rather than by an edit here.
+            productTemplateSlugs: PRODUCT_TEMPLATES.map((t) => t.slug),
+          }),
+        },
+      ],
       output_config: { format: zodOutputFormat(batchSchema) },
     }),
   );

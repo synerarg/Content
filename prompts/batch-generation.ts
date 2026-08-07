@@ -14,8 +14,12 @@ import {
  * 2026-08-06.1 — the user prompt asks for an explicit composition (a recipe)
  * instead of a piece count, and enumerates the pieces one per line so the model
  * has a list to fill rather than a structure to invent.
+ *
+ * 2026-08-07.1 — products. A batch can carry one, in which case the copy is
+ * about that product and the scene briefs for its pieces describe an EMPTY
+ * place rather than the product itself.
  */
-export const BATCH_PROMPT_VERSION = "2026-08-06.1";
+export const BATCH_PROMPT_VERSION = "2026-08-07.1";
 
 function slotLimit(template: AnyTemplateDefinition, key: string): number | null {
   const field = template.slots.shape[key];
@@ -93,7 +97,13 @@ FONDO
 Cada pieza lleva un background_brief: una descripción corta de la ESCENA fotográfica que va de fondo.
 Describí un lugar o una situación real y concreta, no un concepto abstracto.
 En un carrusel, todas las placas comparten la misma escena base para que se lean como un set.
-No menciones texto, carteles ni logos: eso ya se excluye por otro lado.`;
+No menciones texto, carteles ni logos: eso ya se excluye por otro lado.
+
+PRODUCTO
+Algunas plantillas muestran la foto REAL de un producto del cliente. Esa foto la pega el diseño con los píxeles originales: vos no la describís ni pedís que se genere.
+Si el lote tiene un producto, el background_brief de esas piezas describe un lugar VACÍO donde el producto se va a apoyar — una superficie, una luz, un ambiente — y nunca el producto.
+Mal: "una botella de aceite sobre una mesa de madera". Bien: "una mesa de madera junto a una ventana, vacía, con luz de mañana".
+Si describís el producto en la escena, el modelo de imagen dibuja uno inventado y la pieza termina con dos productos.`;
 }
 
 /** Keeps the history section bounded; the hook and angle live at the top. */
@@ -105,6 +115,9 @@ export type UsedAngles = {
   phrases: string[];
 };
 
+/** The product a batch is about, if it has one. */
+export type BatchProduct = { name: string; description: string };
+
 export function buildBatchUserPrompt({
   brandName,
   toneOfVoice,
@@ -114,6 +127,8 @@ export function buildBatchUserPrompt({
   recipe,
   publishedHistory = [],
   usedAngles,
+  product,
+  productTemplateSlugs = [],
 }: {
   brandName: string;
   toneOfVoice: string;
@@ -121,6 +136,17 @@ export function buildBatchUserPrompt({
   exampleCaptions: string[];
   brief: string;
   recipe: BatchRecipe;
+  /** The product every standalone piece in this batch should be about. */
+  product?: BatchProduct;
+  /**
+   * Which templates composite a product, read from the registry.
+   *
+   * Passed in rather than written into the prompt text so adding a product
+   * template teaches the prompt about itself — the same reason slot names and
+   * character limits are reflected out of the zod schemas instead of restated
+   * here.
+   */
+  productTemplateSlugs?: string[];
   /**
    * Captions this brand has already published, newest first.
    *
@@ -219,6 +245,41 @@ export function buildBatchUserPrompt({
         "Ninguna pieza de este lote puede repetir el ángulo, el gancho ni la estructura de las de arriba.",
       ].join("\n"),
     );
+  }
+
+  /*
+    The product, before the brief.
+
+    Same placement logic as the forbidden angles: the model reads what the batch
+    is ABOUT before it reads what to do with it. A product named after the brief
+    tends to be treated as an illustration of the brief; named before it, the
+    brief reads as the angle on the product.
+  */
+  if (product) {
+    const lines = [
+      "PRODUCTO DEL LOTE",
+      `Nombre: ${product.name}`,
+    ];
+    if (product.description.trim()) {
+      lines.push(`Qué es: ${product.description.trim()}`);
+    }
+    lines.push(
+      "",
+      "Este lote es sobre este producto. Cada pieza suelta muestra su foto real.",
+    );
+
+    if (productTemplateSlugs.length > 0) {
+      lines.push(
+        `Las piezas de tipo feed e historia tienen que usar una de estas plantillas: ${productTemplateSlugs.join(", ")}.`,
+      );
+    }
+
+    lines.push(
+      "El titular dice qué le resuelve el producto a quien lo ve. No repitas el nombre del producto en el titular: el diseño ya lo muestra.",
+      "El background_brief de esas piezas describe el lugar VACÍO donde el producto se va a apoyar, nunca el producto.",
+    );
+
+    sections.push(lines.join("\n"));
   }
 
   sections.push(`BRIEF DEL LOTE\n${brief.trim()}`);

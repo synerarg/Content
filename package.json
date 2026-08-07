@@ -10,7 +10,8 @@
     "db:link": "supabase link",
     "db:push": "supabase db push",
     "db:types": "supabase gen types typescript --linked > lib/supabase/database.types.ts",
-    "verify:rls": "node scripts/verify-rls.mjs"
+    "verify:rls": "node scripts/verify-rls.mjs",
+    "verify:products": "tsx --require ./scripts/_stub-server-only.cjs scripts/verify-products.ts"
   },
   "overrides": {
     "postcss": "^8.5.25",
@@ -50,6 +51,7 @@
     "eslint-config-next": "15.5.22",
     "supabase": "^2.111.0",
     "tailwindcss": "^4",
+    "tsx": "^4.23.11",
     "typescript": "^5"
   }
 }

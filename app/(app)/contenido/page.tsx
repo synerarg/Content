@@ -26,7 +26,9 @@ export default async function ContenidoPage() {
   const [{ data: brands }, { data: batches }] = await Promise.all([
     supabase
       .from("brands")
-      .select("id, name, palette, typography, art_direction")
+      .select(
+        "id, name, palette, typography, art_direction, brand_products(id, name)",
+      )
       .order("name"),
     supabase
       .from("content_batches")
@@ -83,6 +85,7 @@ export default async function ContenidoPage() {
             id: brand.id,
             name: brand.name,
             readiness: checkBrandReadiness(brand),
+            products: brand.brand_products ?? [],
           }))}
         />
 

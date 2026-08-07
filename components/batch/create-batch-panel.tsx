@@ -35,9 +35,12 @@ export type BrandOption = {
   id: string;
   name: string;
   readiness: BrandReadiness;
+  products: Array<{ id: string; name: string }>;
 };
 
 const CUSTOM = "custom";
+/** Sentinel for the Select: Radix treats "" as "no value" and shows the placeholder. */
+const NO_PRODUCT = "none";
 
 /** Publishing order, which is not the enum's declaration order. */
 const KIND_ORDER: PostKind[] = ["carousel", "feed", "story"];
@@ -104,6 +107,7 @@ export function CreateBatchPanel({ brands }: { brands: BrandOption[] }) {
     feed: { count: 1, slides: 1 },
     story: { count: 1, slides: 1 },
   });
+  const [productId, setProductId] = useState<string>(NO_PRODUCT);
   const [pending, setPending] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -132,6 +136,26 @@ export function CreateBatchPanel({ brands }: { brands: BrandOption[] }) {
   const readiness = brand?.readiness;
   const brandBlocked = readiness ? !readiness.ready : false;
 
+  const products = brand?.products ?? [];
+  // A product chosen for a brand that no longer has it — after switching brands —
+  // must not be sent: the route would reject it as belonging to another brand.
+  const selectedProductId =
+    productId !== NO_PRODUCT && products.some((item) => item.id === productId)
+      ? productId
+      : null;
+
+  /*
+    A product only ever appears on a standalone piece.
+
+    Carousel slides use the cover/body templates, which composite nothing, so a
+    recipe of carousels alone with a product selected produces a batch where the
+    product is nowhere — and the only clue would be that the pieces look normal.
+    Said before the call rather than discovered after it.
+  */
+  const productHasNowhereToGo =
+    selectedProductId !== null &&
+    recipe.every((item) => item.type === "carousel" || item.count === 0);
+
   async function handleGenerate() {
     if (brief.trim().length < 8) {
       toast.error("Contame un poco más sobre el lote.");
@@ -155,7 +179,12 @@ export function CreateBatchPanel({ brands }: { brands: BrandOption[] }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         signal: controller.signal,
-        body: JSON.stringify({ brandId, brief, recipe }),
+        body: JSON.stringify({
+          brandId,
+          brief,
+          recipe,
+          productId: selectedProductId,
+        }),
       });
 
       if (!res.ok) {
@@ -223,6 +252,44 @@ export function CreateBatchPanel({ brands }: { brands: BrandOption[] }) {
           </p>
         ) : null}
       </div>
+
+      {/*
+        Only shown when the brand has products. A "(ninguno)" dropdown on every
+        brand that will never use one is a control that exists to be ignored.
+      */}
+      {products.length > 0 ? (
+        <div className="space-y-2">
+          <Label>Producto</Label>
+          <Select value={productId} onValueChange={setProductId}>
+            <SelectTrigger className="sm:w-72">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NO_PRODUCT}>Sin producto</SelectItem>
+              {products.map((item) => (
+                <SelectItem key={item.id} value={item.id}>
+                  {item.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <p className="text-xs text-muted-foreground">
+            {selectedProductId
+              ? "Las piezas sueltas van a hablar de este producto y a mostrar su foto real. Los fondos se piden como escenas vacías, para que el modelo no dibuje otro producto encima."
+              : "Elegí un producto si querés que el lote sea sobre él."}
+          </p>
+
+          {productHasNowhereToGo ? (
+            <p className="flex items-start gap-2 rounded-lg border border-[color-mix(in_oklch,var(--synera-accent)_28%,transparent)] px-3 py-2 text-xs text-muted-foreground">
+              <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
+              Con sólo carruseles el producto no aparece en ninguna placa: las
+              plantillas de carrusel no muestran productos. Agregá un feed o una
+              historia.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="space-y-2">
         <Label>Composición</Label>

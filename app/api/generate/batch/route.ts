@@ -5,6 +5,7 @@ import { requireWorkspaceId } from "@/lib/workspace";
 import { generateBatch, BATCH_MODEL } from "@/lib/ai/generate-batch";
 import { logGeneration } from "@/lib/ai/log-generation";
 import { codeOf } from "@/lib/errors";
+import { templateUsesProduct } from "@/templates/registry";
 import { historyAnalysisSchema } from "@/lib/ai/analyze-history";
 import {
   describeRecipe,
@@ -28,6 +29,8 @@ const requestSchema = z.object({
   // The recipe's own schema carries the ceilings and the per-type slide rules,
   // so the route validates the exact same contract the browser built against.
   recipe: recipeSchema,
+  /** Optional: the product every standalone piece in this batch is about. */
+  productId: z.uuid().nullable().optional(),
 });
 
 export async function POST(request: Request) {
@@ -39,7 +42,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { brandId, brief, recipe } = parsed.data;
+  const { brandId, brief, recipe, productId } = parsed.data;
 
   let workspaceId: string;
   try {
@@ -81,6 +84,36 @@ export async function POST(request: Request) {
   const usedAngles =
     analysis.success && analysis.data.angles.length > 0 ? analysis.data : undefined;
 
+  /*
+    The product, resolved and scoped to THIS brand.
+
+    Filtered on brand_id as well as id, so a request naming another client's
+    product gets "no encontrado" rather than that client's photo on this
+    client's piece. RLS already bounds it to the workspace; this bounds it to
+    the brand, which the database cannot (slides carry no brand_id — see
+    migration 0013).
+  */
+  let product: { id: string; name: string; description: string } | null = null;
+  if (productId) {
+    const { data: row, error: productError } = await supabase
+      .from("brand_products")
+      .select("id, name, description")
+      .eq("id", productId)
+      .eq("brand_id", brand.id)
+      .maybeSingle();
+
+    if (productError) {
+      return NextResponse.json({ error: productError.message }, { status: 500 });
+    }
+    if (!row) {
+      return NextResponse.json(
+        { error: "No se encontró el producto en esta marca." },
+        { status: 404 },
+      );
+    }
+    product = { id: row.id, name: row.name, description: row.description ?? "" };
+  }
+
   try {
     const result = await generateBatch({
       brandName: brand.name,
@@ -90,6 +123,9 @@ export async function POST(request: Request) {
       brief,
       recipe,
       usedAngles,
+      product: product
+        ? { name: product.name, description: product.description }
+        : undefined,
     });
 
     const { data: batch, error: batchError } = await supabase
@@ -141,6 +177,17 @@ export async function POST(request: Request) {
         template_slug: slide.templateSlug,
         format: post.format,
         slots: slide.slots as never,
+        /*
+          Written only where the template actually composites one.
+
+          Setting it on every slide would be harmless to render — a template
+          that ignores `product` ignores it — but it would make the export gate
+          and any future "which pieces show the product" question answer wrong,
+          and it would put a product reference on carousel slides that can never
+          display it.
+        */
+        product_id:
+          product && templateUsesProduct(slide.templateSlug) ? product.id : null,
         background_path: null,
         // Carries the scene forward so a background can be generated later, and
         // so every slide in a carousel asks for the same one.
@@ -167,6 +214,7 @@ export async function POST(request: Request) {
         recipe,
         recipeLabel: describeRecipe(recipe),
         promptVersion: result.promptVersion,
+        productId: product?.id ?? null,
         // Recorded so a batch that repeats itself can be traced to whether it
         // was generated with prohibitions at all, and which ones.
         forbiddenAngles: usedAngles?.angles.map((angle) => angle.slug) ?? [],
