@@ -247,6 +247,7 @@ export function BatchDetail({
       backgroundBrief: slide.backgroundBrief,
       format: slide.format,
       templateSlug: slide.templateSlug,
+      productId: slide.productId,
     };
   }
 

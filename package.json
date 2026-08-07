@@ -19,7 +19,8 @@
     "verify:website": "tsx --require ./scripts/_stub-server-only.cjs scripts/verify-website.ts",
     "probe:website": "tsx --require ./scripts/_stub-server-only.cjs scripts/probe-website.ts",
     "verify:search": "tsx --require ./scripts/_stub-server-only.cjs scripts/verify-search.ts",
-    "probe:image-prompt": "tsx --require ./scripts/_stub-server-only.cjs scripts/probe-image-prompt.ts"
+    "probe:image-prompt": "tsx --require ./scripts/_stub-server-only.cjs scripts/probe-image-prompt.ts",
+    "probe:scene-ab": "tsx --require ./scripts/_stub-server-only.cjs scripts/probe-scene-reference.ts"
   },
   "overrides": {
     "postcss": "^8.5.25",

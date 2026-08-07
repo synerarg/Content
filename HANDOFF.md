@@ -270,6 +270,8 @@ template automatically teaches the prompts its slot names and character limits.
 | Gemini accepts an INPUT image | **PASS, 2026-08-07** — `npm run probe:scene-ref` returned 200 with an image. The `{type:"image", mime_type, data}` shape is correct, so the scene reference is buildable |
 | Image prompt `2026-08-07.2`, **live before/after** | **PASS, 2026-08-07** — `npm run probe:image-prompt`, three generations off one brief. See §12 for what the images actually showed |
 | Empty-staging-area directive | **PASS, live** — the identical brief put a carafe, apples, jars and a book on the table WITHOUT the directive, and returned a completely bare surface with it |
+| Scene reference, **live A/B** (`npm run probe:scene-ab`) | **PASS** — handed a photo of a dark olive bottle, the scene came back EMPTY and visibly matched its hard side light. Costs ~400 input tokens |
+| Scene reference does not tint the set | **PASS after a fix the probe forced** — prompt `.3` returned a kitchen painted the bottle's own olive green. `.4` takes the light and refuses the colour; same reference, green gone |
 
 **The PNG export — CLOSED, 2026-08-06.**
 
@@ -552,7 +554,8 @@ npm run verify:website     # 66 SSRF + extraction assertions, no network
 npm run verify:search      # 22 snippet assertions
 npm run probe:variants     # LIVE Claude call, ~US$0.04
 npm run probe:website <url># LIVE fetch + Claude call, ~US$0.04
-npm run probe:scene-ref  # costs ONE image if the Gemini account has credit
+npm run probe:scene-ref  # costs ONE image; confirms the API takes an input image
+npm run probe:scene-ab   # LIVE A/B of the scene reference, ~3 images
 ```
 
 ---
@@ -848,10 +851,39 @@ buildable**. The returned scene was empty, which answers the follow-up question 
 warns about: the model treated the reference as a style cue rather than as something to
 draw.
 
-**The scene reference itself is still NOT built**, and that is now a choice rather than a
-blocker: the API shape is confirmed, so it is ordinary work — send the product's bytes
-alongside the scene prompt, and decide what happens when a brand has several products on
-one carousel.
+### The scene reference — built, 2026-08-07
+
+The product's own photograph is sent to the model so the empty set is lit and framed for
+that object. The product is still composited by the template from those same bytes; the
+model never draws it.
+
+- `GenerateImageParams.referenceImage` on the provider seam. Gemini sends it as
+  `{type:"image", mime_type, data}` **after** the text — order matters, because a lone
+  photograph read first means "draw this".
+- `ImageProvider.supportsReferenceImage` is declared per provider, and
+  `GeneratedImage.referenceUsed` reports what actually happened. Those are different
+  facts: a scene whose light does not match can be traced to which of the two failed.
+- The route fetches the product from Storage server-to-server, scoped to the BRAND as well
+  as the workspace, sniffs the real type from the bytes, and **degrades at every step** —
+  a missing row, a 404, unreadable bytes all fall back to generating without a cue and
+  write the reason onto the `generations` row. None of them lose a generation the user is
+  waiting for.
+- Costs about **400 extra input tokens** per image, measured.
+
+**A prompt version the probe forced.** Version `.3` worked — empty set, light visibly
+matched — but it matched too much: handed a dark olive bottle it returned a kitchen whose
+window frame and shutters were painted the same olive green. A set the colour of the
+product is a set the product disappears into. `.4` says take the light and the camera,
+**not the colour**, and asks for surfaces that contrast with the object. Re-run against the
+identical reference: still empty, light still hard and directional, green gone.
+
+**Honest caveat:** "contrast" moved the HUE away, but the counter it produced is still
+dark, and so is the bottle. The instruction shifts the palette rather than guaranteeing
+separation — which is another reason the legibility check and a human eye both matter here.
+
+**Not covered:** a carousel whose slides carry different products sends a different
+reference per slide, so the four scenes have no shared style beyond their shared
+`background_brief`. That is the same cohesion problem already listed in §14, not a new one.
 
 ---
 
@@ -1012,12 +1044,12 @@ Still open:
      loop over offscreen-mounted slides and the jszip assembly have never run for real.
 3. **Carousel background cohesion** (see §10) — needs a prompt-level solution, since
    Gemini ignores seeds.
-4. **Build the scene reference.** No longer blocked: `npm run probe:scene-ref` confirmed
-   on 2026-08-07 that the interactions API accepts an input image. What is left is
-   ordinary work — send the product's bytes alongside the scene prompt so the generated
-   light and perspective match the photo that gets composited, and decide what a carousel
-   does when its slides carry different products. `lib/image/provider.ts` would grow a
-   `referenceImage` on `GenerateImageParams`; fal takes one too, under a different name.
+4. **Scene reference on fal.** The Gemini path is built and verified (§12). The fal
+   provider IGNORES a reference and reports `referenceUsed: false`, because that account
+   has had no balance since Phase 4 and nothing here has ever sent it an input image —
+   claiming support from documentation is exactly what this project does not do. Turning
+   it on means finding the right endpoint, sending the image, looking at what comes back,
+   and only then changing `supportsReferenceImage`.
 5. **Look at a product piece once.** Same limitation as everything else visual here: no
    authenticated screenshot exists. The two product templates, the checkerboard preview
    and the cut-out have been verified by typecheck, lint, a production build and 31

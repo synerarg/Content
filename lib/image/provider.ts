@@ -13,6 +13,25 @@ import type { FormatKey } from "@/templates/types";
  * anyway to copy them into Storage.
  */
 
+/**
+ * A photograph handed to the model as a STYLE CUE, never as a subject.
+ *
+ * The one use today is the product scene: the client's real product photo goes
+ * in so the generated set is lit and framed for that object — the same light
+ * direction, the same surface reflectivity, a camera at the same height — while
+ * the product itself is still composited afterwards from these very bytes.
+ *
+ * Sending it does NOT relax the no-product rule; it makes it harder to hold, and
+ * the prompt says so explicitly. Verified live on 2026-08-07: handed a reference,
+ * `gemini-2.5-flash-image` returned an empty set rather than drawing what it was
+ * shown.
+ */
+export type ReferenceImage = {
+  bytes: Uint8Array;
+  /** The real type, sniffed from the bytes — never the one Storage recorded. */
+  contentType: string;
+};
+
 export type GenerateImageParams = {
   prompt: string;
   /** Exact dimensions, for providers that accept them (fal). */
@@ -22,6 +41,12 @@ export type GenerateImageParams = {
   aspectRatio: string;
   /** Reused across a carousel's slides to hold the visual style steady. */
   seed?: number | null;
+  /**
+   * Optional style cue. A provider that cannot take one must IGNORE it rather
+   * than fail — a scene whose light was not matched is still a usable scene,
+   * and losing the whole generation over an optional refinement is not.
+   */
+  referenceImage?: ReferenceImage | null;
 };
 
 export type GeneratedImage = {
@@ -38,11 +63,28 @@ export type GeneratedImage = {
   /** Reported by token-billed providers (Gemini); absent for per-pixel ones. */
   inputTokens?: number;
   outputTokens?: number;
+  /**
+   * Whether a reference image was actually SENT.
+   *
+   * Reported back rather than assumed by the caller, because "we passed one"
+   * and "the model saw one" are different facts: a provider that does not
+   * support references ignores it silently by design. The route records this on
+   * the `generations` row, so a scene that came back unmatched can be traced to
+   * whether the cue ever left the building.
+   */
+  referenceUsed: boolean;
 };
 
 export interface ImageProvider {
   readonly name: string;
   readonly model: string;
+  /**
+   * Whether `referenceImage` reaches the model at all.
+   *
+   * Declared on the provider so callers can say so in the UI instead of
+   * offering a refinement that quietly does nothing on the configured backend.
+   */
+  readonly supportsReferenceImage: boolean;
   generate(params: GenerateImageParams): Promise<GeneratedImage>;
 }
 

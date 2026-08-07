@@ -260,6 +260,7 @@ export function SlideEditor({ brands }: { brands: EditorBrand[] }) {
               format={format}
               templateSlug={templateSlug}
               suggestedScene={brief}
+              productId={needsProduct ? productId : null}
               backgroundUrl={backgroundUrl}
               onBackgroundChange={setBackgroundUrl}
             />

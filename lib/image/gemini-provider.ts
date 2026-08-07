@@ -70,9 +70,29 @@ function decodeBase64(value: string): Uint8Array {
   return new Uint8Array(Buffer.from(value, "base64"));
 }
 
+/**
+ * The base64 ceiling for a reference image.
+ *
+ * Product photos are already capped at 1600px / 2 MiB by the browser
+ * preparation (lib/products/prepare-image.ts), so this is a backstop rather
+ * than a working limit — but it is a real one: the reference is billed as INPUT
+ * TOKENS, and an image that somehow arrived at 20 MB would cost more than the
+ * generation it was meant to improve. Over the cap the reference is dropped and
+ * the scene is generated without it, which is the correct degradation.
+ */
+const MAX_REFERENCE_BYTES = 3 * 1024 * 1024;
+
 export class GeminiImageProvider implements ImageProvider {
   readonly name = "google";
   readonly model = process.env.GEMINI_IMAGE_MODEL?.trim() || DEFAULT_MODEL;
+  /*
+    Confirmed against the live API on 2026-08-07, not assumed from the docs:
+    `{ type: "image", mime_type, data }` inside `input` is accepted and the
+    model returns a scene rather than a redraw of what it was shown. The first
+    attempt at this probe died on billing BEFORE anything looked at the field,
+    which is exactly why it is written down here as a verified fact with a date.
+  */
+  readonly supportsReferenceImage = true;
 
   async generate(params: GenerateImageParams): Promise<GeneratedImage> {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -84,6 +104,28 @@ export class GeminiImageProvider implements ImageProvider {
 
     const started = Date.now();
 
+    /*
+      The reference goes in AFTER the text.
+
+      Order is not incidental: the prompt has to establish that this is an empty
+      set before the image arrives, or the image is the first thing the model
+      reads and "draw this" is the obvious reading of a lone photograph.
+    */
+    const reference = params.referenceImage ?? null;
+    const referenceUsable =
+      reference !== null && reference.bytes.byteLength <= MAX_REFERENCE_BYTES;
+
+    const input: Array<Record<string, unknown>> = [
+      { type: "text", text: params.prompt },
+    ];
+    if (referenceUsable && reference) {
+      input.push({
+        type: "image",
+        mime_type: reference.contentType,
+        data: Buffer.from(reference.bytes).toString("base64"),
+      });
+    }
+
     const response = await fetch(ENDPOINT, {
       method: "POST",
       headers: {
@@ -92,7 +134,7 @@ export class GeminiImageProvider implements ImageProvider {
       },
       body: JSON.stringify({
         model: this.model,
-        input: [{ type: "text", text: params.prompt }],
+        input,
         response_format: {
           type: "image",
           // JPEG only — the API rejects image/png outright with
@@ -183,6 +225,7 @@ export class GeminiImageProvider implements ImageProvider {
       durationMs,
       inputTokens: payload.usage?.total_input_tokens,
       outputTokens: payload.usage?.total_output_tokens,
+      referenceUsed: referenceUsable,
     };
   }
 }

@@ -53,6 +53,20 @@ function describeFalError(cause: unknown): string {
 export class FalFluxProvider implements ImageProvider {
   readonly name = "fal";
   readonly model = FAL_ENDPOINT;
+  /*
+    False, and deliberately not "probably yes".
+
+    FLUX.2 does expose image-conditioning endpoints, but this provider targets
+    `fal-ai/flux-2` and nothing here has ever sent one an input image — the fal
+    account has had no balance since Phase 4, so any support claimed would be
+    claimed from documentation rather than from a run. A reference passed to
+    this provider is IGNORED, the scene is generated without it, and
+    `referenceUsed: false` says so on the generations row.
+
+    Turning this on means: find the right endpoint, send the image, look at what
+    comes back, and only then change this line.
+  */
+  readonly supportsReferenceImage = false;
 
   async generate(params: GenerateImageParams): Promise<GeneratedImage> {
     const credentials = process.env.FAL_KEY;
@@ -132,6 +146,8 @@ export class FalFluxProvider implements ImageProvider {
       model: this.model,
       megapixels: megapixelsOf(width, height),
       durationMs: Date.now() - started,
+      // Always false, and honestly so: see supportsReferenceImage above.
+      referenceUsed: false,
     };
   }
 }

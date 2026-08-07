@@ -14,11 +14,22 @@ import type { FormatKey } from "@/templates/types";
 
   2026-08-07.2 — product scenes. When a piece carries a product, the scene must
   contain an EMPTY staging area and no object standing in it; the client's real
-  product is composited into that space afterwards. Also untested live, and it
-  is the directive most likely to need a second pass: the failure mode is a
-  scene that helpfully includes a bottle of its own.
+  product is composited into that space afterwards. VERIFIED LIVE: the identical
+  brief loaded the table with props without this block and returned a bare
+  surface with it.
+
+  2026-08-07.3 — the scene reference. When the product photo itself is sent to
+  the model, the prompt has to say what it is FOR. A photograph arriving with no
+  explanation reads as "draw this", which is the one thing it must not mean.
+
+  2026-08-07.4 — take the light, not the colour. .3 worked — the scene came back
+  empty and visibly matched — but it matched too much: handed a dark olive
+  bottle it returned a kitchen whose window frame and shutters were painted the
+  same olive green. A set the colour of the product is a set the product
+  disappears into, and the product is the subject. Verified live: the same
+  reference under .4 keeps the light and drops the colour match.
 */
-export const IMAGE_PROMPT_VERSION = "2026-08-07.2";
+export const IMAGE_PROMPT_VERSION = "2026-08-07.4";
 
 export type ArtDirection = {
   photographic_style: string;
@@ -113,6 +124,31 @@ const PRODUCT_SCENE_DIRECTIVE = [
 ].join(" ");
 
 /*
+  WHAT THE ATTACHED PHOTOGRAPH IS FOR
+
+  Appended only when a reference image actually travels with the request, and it
+  exists because of what a bare photograph means to a model: "draw this". That
+  is the single thing it must not mean here — the product's real pixels are
+  composited by the template afterwards, and a redrawn label is gibberish.
+
+  So the reference is named as a LIGHTING AND CAMERA brief. It says what to take
+  from the image (the direction and quality of the light, the height and angle
+  of the camera, how the surface should reflect) and repeats, in the same
+  breath, that the object itself must not appear. Repetition is deliberate: the
+  no-product rule is already stated above, and sending a picture of the product
+  is the strongest possible argument against it.
+*/
+const SCENE_REFERENCE_DIRECTIVE = [
+  "An image is attached for reference ONLY.",
+  "It shows the object that will be placed into this scene LATER, by someone else.",
+  "Take from it ONLY the light and the camera: the direction and hardness of the light, the length and edge of the shadows, the height and angle of the camera, and how surfaces should reflect.",
+  "Do NOT take its colour. The set must NOT be painted in the object's own colours.",
+  "The surfaces behind and beneath the object should CONTRAST with it in tone and hue, so that when it is placed there it separates clearly from its background.",
+  "Do NOT draw, reproduce, include or imitate the object in the attached image.",
+  "The object must be completely absent from the frame. Its place stays empty.",
+].join(" ");
+
+/*
   What separates a photograph from a stock image.
 
   Without this the model reliably produces the archetypal AI office photo:
@@ -138,6 +174,7 @@ export function composeImagePrompt({
   format,
   templateSlug,
   hasProduct = false,
+  hasReferenceImage = false,
 }: {
   brief: string;
   artDirection: ArtDirection;
@@ -152,6 +189,16 @@ export function composeImagePrompt({
    * carried by the brief, which the copy model wrote knowing the product.
    */
   hasProduct?: boolean;
+  /**
+   * Whether the product photo is actually TRAVELLING with this request.
+   *
+   * Separate from `hasProduct` on purpose. A piece can carry a product while the
+   * configured provider cannot take a reference image (fal today), and telling
+   * the model about "the attached image" when nothing is attached is a
+   * instruction it cannot follow — which is worse than saying nothing. The route
+   * asks the provider before setting this.
+   */
+  hasReferenceImage?: boolean;
 }): string {
   const parts: string[] = [];
 
@@ -183,7 +230,11 @@ export function composeImagePrompt({
   //    refinement of the frame rather than as a competing instruction.
   if (hasProduct) parts.push(PRODUCT_SCENE_DIRECTIVE);
 
-  // 6. Brand-specific exclusions, then the non-negotiable ones.
+  // 6. What the attached photograph is for, immediately after the rule it is
+  //    most likely to undermine.
+  if (hasReferenceImage) parts.push(SCENE_REFERENCE_DIRECTIVE);
+
+  // 7. Brand-specific exclusions, then the non-negotiable ones.
   const avoid = artDirection.avoid.map((item) => item.trim()).filter(Boolean);
   if (avoid.length > 0) {
     parts.push(`Avoid: ${avoid.join(", ")}.`);

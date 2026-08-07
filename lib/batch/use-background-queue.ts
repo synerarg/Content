@@ -52,6 +52,16 @@ export type QueueItem = {
   backgroundBrief: string;
   format: FormatKey;
   templateSlug: string;
+  /**
+   * The product this slide composites, sent so the scene can be lit for it.
+   *
+   * Carried on the queue item rather than looked up server-side from the slide,
+   * because the browser may hold a product the user just switched to and has
+   * not been refreshed away — `setSlideProduct` deliberately does not
+   * revalidate. Sending what is on screen keeps the scene matched to the
+   * product the user is actually looking at.
+   */
+  productId?: string | null;
 };
 
 export type SlideQueueState = {
@@ -178,6 +188,7 @@ export function useBackgroundQueue({
               brief: item.backgroundBrief,
               format: item.format,
               templateSlug: item.templateSlug,
+              productId: item.productId ?? null,
             }),
           });
         } catch (cause) {

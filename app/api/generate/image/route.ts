@@ -3,7 +3,12 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireWorkspaceId } from "@/lib/workspace";
 import { getImageProvider } from "@/lib/image/factory";
-import { GENERATION_SIZE, RateLimitError } from "@/lib/image/provider";
+import {
+  GENERATION_SIZE,
+  RateLimitError,
+  sniffImageType,
+  type ReferenceImage,
+} from "@/lib/image/provider";
 import { composeImagePrompt, IMAGE_PROMPT_VERSION } from "@/prompts/image-prompt";
 import { artDirectionSchema } from "@/lib/schemas/brand";
 import { logGeneration } from "@/lib/ai/log-generation";
@@ -33,6 +38,14 @@ const requestSchema = z.object({
   templateSlug: z.string().trim().min(1).max(80),
   /** Reuse to hold style steady across a carousel; omit for a fresh look. */
   seed: z.number().int().nullable().optional(),
+  /**
+   * The product this slide composites, when it has one.
+   *
+   * Used as a SCENE REFERENCE — its photo is sent to the model so the empty set
+   * is lit and framed for that object. The product is still composited by the
+   * template from these same bytes; the model never draws it.
+   */
+  productId: z.uuid().nullable().optional(),
 });
 
 export async function POST(request: Request) {
@@ -44,7 +57,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { brandId, brief, format, templateSlug, seed } = parsed.data;
+  const { brandId, brief, format, templateSlug, seed, productId } = parsed.data;
 
   let workspaceId: string;
   try {
@@ -80,6 +93,64 @@ export async function POST(request: Request) {
     something already standing in the spot the product is about to occupy.
   */
   const hasProduct = templateUsesProduct(templateSlug);
+  const size = GENERATION_SIZE[format];
+  const provider = getImageProvider();
+
+  /*
+    The scene reference, fetched server-to-server.
+
+    Only when all three things line up: the template composites a product, a
+    product was named, and the configured provider can actually take a reference.
+    Any of them missing means the scene is generated without a cue — which is
+    the ordinary case, not a failure.
+
+    Every step degrades rather than throws. A product row that vanished, a
+    Storage object that 404s, bytes that are not an image: none of those are a
+    reason to lose a generation the user is waiting for, and the reason is
+    recorded on the row instead.
+  */
+  let referenceImage: ReferenceImage | null = null;
+  let referenceNote: string | null = null;
+
+  if (hasProduct && productId) {
+    if (!provider.supportsReferenceImage) {
+      referenceNote = `${provider.name} no acepta imagen de referencia`;
+    } else {
+      // Scoped to the brand as well as the workspace, exactly as the batch
+      // route does: RLS bounds this to the workspace, and slides carry no
+      // brand_id, so nothing else stops one client's product being used as the
+      // reference for another client's scene.
+      const { data: product } = await supabase
+        .from("brand_products")
+        .select("image_path")
+        .eq("id", productId)
+        .eq("brand_id", brand.id)
+        .maybeSingle();
+
+      if (!product) {
+        referenceNote = "el producto no pertenece a esta marca";
+      } else {
+        const { data: file, error: downloadError } = await supabase.storage
+          .from("brand-assets")
+          .download(product.image_path);
+
+        if (downloadError || !file) {
+          referenceNote = `no se pudo leer la foto del producto: ${downloadError?.message ?? "sin datos"}`;
+        } else {
+          const bytes = new Uint8Array(await file.arrayBuffer());
+          // Sniffed, never trusted from Storage: the contentType trap in §7 of
+          // HANDOFF is exactly about that field being wrong.
+          const sniffed = sniffImageType(bytes);
+          if (!sniffed) {
+            referenceNote = "la foto del producto no es una imagen reconocible";
+          } else {
+            referenceImage = { bytes, contentType: sniffed };
+          }
+        }
+      }
+    }
+  }
+
   const prompt = composeImagePrompt({
     brief,
     artDirection: artDirection.success
@@ -88,10 +159,12 @@ export async function POST(request: Request) {
     format,
     templateSlug,
     hasProduct,
+    // Only claimed when the bytes are genuinely going along. Telling the model
+    // about "the attached image" with nothing attached is an instruction it
+    // cannot follow.
+    hasReferenceImage: referenceImage !== null,
   });
 
-  const size = GENERATION_SIZE[format];
-  const provider = getImageProvider();
   const started = Date.now();
 
   try {
@@ -101,6 +174,7 @@ export async function POST(request: Request) {
       height: size.height,
       aspectRatio: size.aspectRatio,
       seed: seed ?? null,
+      referenceImage,
     });
 
     // The provider already normalised its result to bytes, so this is a plain
@@ -145,6 +219,16 @@ export async function POST(request: Request) {
         prompt,
         promptVersion: IMAGE_PROMPT_VERSION,
         hasProduct,
+        productId: productId ?? null,
+        /*
+          Both recorded, and they are different facts. `referenceSent` is what
+          this route decided; `referenceUsed` (in output, below) is what the
+          provider actually did with it. A scene whose light does not match its
+          product can then be traced to which of the two failed, instead of
+          being a shrug.
+        */
+        referenceSent: referenceImage !== null,
+        referenceNote,
         width: size.width,
         height: size.height,
         seed: seed ?? null,
@@ -155,6 +239,7 @@ export async function POST(request: Request) {
         width: image.width,
         height: image.height,
         megapixels: image.megapixels,
+        referenceUsed: image.referenceUsed,
       },
       inputTokens: image.inputTokens,
       outputTokens: image.outputTokens,
@@ -173,6 +258,10 @@ export async function POST(request: Request) {
       prompt,
       costUsd,
       durationMs,
+      // Surfaced so the panel can say "escena ajustada al producto" only when
+      // it actually was, rather than promising a refinement that did not happen.
+      referenceUsed: image.referenceUsed,
+      referenceNote,
     });
   } catch (cause) {
     const message =

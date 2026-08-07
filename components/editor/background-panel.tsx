@@ -20,6 +20,10 @@ type ImageResponse = {
   prompt: string;
   costUsd: number | null;
   durationMs: number;
+  /** Whether the product photo actually reached the model as a style cue. */
+  referenceUsed?: boolean;
+  /** Why it did not, when it did not. */
+  referenceNote?: string | null;
 };
 
 export function BackgroundPanel({
@@ -27,6 +31,7 @@ export function BackgroundPanel({
   format,
   templateSlug,
   suggestedScene,
+  productId,
   backgroundUrl,
   onBackgroundChange,
 }: {
@@ -34,6 +39,13 @@ export function BackgroundPanel({
   format: FormatKey;
   templateSlug: string;
   suggestedScene: string;
+  /**
+   * The product the piece composites, when it has one.
+   *
+   * Sent so the scene can be lit and framed for that object. The model still
+   * never draws it — see the reference directive in prompts/image-prompt.ts.
+   */
+  productId?: string | null;
   backgroundUrl: string | null;
   onBackgroundChange: (url: string | null) => void;
 }) {
@@ -76,6 +88,7 @@ export function BackgroundPanel({
           format,
           templateSlug,
           seed: reuseSeed ? (last?.seed ?? null) : null,
+          productId: productId ?? null,
         }),
       });
 
@@ -198,6 +211,18 @@ export function BackgroundPanel({
           <span>{(last.durationMs / 1000).toFixed(1)}s</span>
           <span>{last.megapixels} MP</span>
           {last.seed !== null ? <span>seed {last.seed}</span> : null}
+          {/*
+            Only claimed when it happened. Saying "escena ajustada al producto"
+            on a run where the reference never left the server would be a
+            promise the image does not keep.
+          */}
+          {last.referenceUsed ? (
+            <span className="text-[var(--synera-accent)]">
+              escena ajustada al producto
+            </span>
+          ) : last.referenceNote ? (
+            <span title={last.referenceNote}>sin referencia de producto</span>
+          ) : null}
         </div>
       ) : null}
     </div>
