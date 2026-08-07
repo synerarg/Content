@@ -8,6 +8,7 @@ import {
   LayoutGrid,
   LayoutTemplate,
   Palette,
+  Search,
   Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -16,6 +17,7 @@ const NAV_ITEMS = [
   { href: "/marcas", label: "Marcas", icon: Palette },
   { href: "/contenido", label: "Contenido", icon: LayoutGrid },
   { href: "/calendario", label: "Calendario", icon: CalendarDays },
+  { href: "/buscar", label: "Buscar", icon: Search },
   { href: "/plantillas", label: "Plantillas", icon: LayoutTemplate },
   { href: "/configuracion", label: "Configuración", icon: Settings },
   { href: "/ayuda", label: "Ayuda", icon: CircleQuestionMark },

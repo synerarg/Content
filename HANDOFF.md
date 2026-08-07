@@ -109,6 +109,8 @@ public by design and safe; everything else is not.
                                      (on delete set null)  (Phase 8)
 20260805001400_scheduling.sql        posts.scheduled_on (date) +
                                      posts.scheduled_time (time)  (Phase 9)
+20260805001500_search.sql            jsonb_values_text() + search_content()
+                                     RPC, security invoker  (Phase 10)
 ```
 
 ### RLS design (applies to every table)
@@ -146,6 +148,12 @@ app/api/analyze/history   Runs that extraction, stores it on the brand  (Phase 7
 app/(app)/marcas/[id]/historial     Import published posts, run the analysis  (Phase 7)
 app/(app)/marcas/[id]/productos     Upload products, optional cut-out  (Phase 8)
 app/(app)/calendario                Month grid + unscheduled inbox  (Phase 9)
+app/(app)/buscar                    Full-text search over every piece  (Phase 10)
+app/api/generate/variants           N alternatives for one piece  (Phase 10)
+app/api/analyze/website             Brand Kit draft from a client URL  (Phase 10)
+lib/ai/slot-limits.ts     The zod max_length reflection, in ONE place  (Phase 10)
+lib/render/legibility.ts  Contrast against the rendered pixels  (Phase 10)
+lib/web/safe-fetch.ts     SSRF-guarded fetch of a user-typed URL  (Phase 10)
 lib/schedule.ts           Calendar arithmetic, UTC-only, no local clock  (Phase 9)
 components/batch/schedule-panel.tsx Spread a batch across days, with a preview  (Phase 9)
 lib/products/prepare-image.ts       Browser resize + alpha detect + flat-bg cut-out  (Phase 8)
@@ -153,6 +161,11 @@ lib/render/use-product-assets.ts    Product images -> blob URLs for the export  
 scripts/verify-rls.mjs    `npm run verify:rls`
 scripts/verify-products.ts          `npm run verify:products` — 31 assertions
 scripts/verify-schedule.ts          `npm run verify:schedule` — 59, twice (see §7)
+scripts/verify-legibility.ts        `npm run verify:legibility` — 26 assertions
+scripts/verify-website.ts           `npm run verify:website` — 66 assertions
+scripts/verify-search.ts            `npm run verify:search` — 22 assertions
+scripts/probe-variants.ts           `npm run probe:variants` — LIVE, ~US$0.04
+scripts/probe-website.ts            `npm run probe:website <url>` — LIVE, ~US$0.04
 scripts/probe-gemini-reference.ts   `npm run probe:scene-ref` — needs Gemini credit
 scripts/_stub-server-only.cjs       Lets probes import `server-only` modules
 ```
@@ -247,6 +260,12 @@ template automatically teaches the prompts its slot names and character limits.
 | Products, 31 asserts (`npm run verify:products`) | PASS — registry flags, both prompts, the form schema, and the cut-out guard rails against synthetic images (product eaten / nothing found / busy corners / product fills the frame) |
 | Scheduling, 59 asserts × 2 zones (`npm run verify:schedule`) | PASS — under the machine's zone AND pinned to UTC. **Verified to be a real test:** reintroducing the `formatDay` bug passes locally and fails the UTC pass with `04-ago` / `31-dic` |
 | Calendar PostgREST queries | PASS — both embeds answer `200 []` anonymously, so the shape is valid and RLS filters it |
+| Variants, **live** (`npm run probe:variants`) | PASS — 16 assertions, US$0.04. Distinct angles, limits respected, no tuteo, hashtags normalised. Read by hand: "costo de no hacerlo" / "el cliente esperando" / "la pérdida invisible" — three real arguments, none reusing the original's |
+| Legibility, 26 asserts (`npm run verify:legibility`) | PASS — including the crossing case that caught the original design |
+| Website import, 66 asserts (`npm run verify:website`) | PASS — every address-filter bypass worth naming, plus extraction against a fixture |
+| Website import, **live** against supabase.com | PASS with a caveat — voice draft is genuinely useful and honest about its gaps; the palette needed two fixes found by this run alone (see §7) |
+| `search_content` RPC | PASS — valid shape, handles quoted phrases and `-exclusions` without raising, answers `200 []` anonymously |
+| Search snippets, 22 asserts (`npm run verify:search`) | PASS — including the accent-offset trap |
 | `brand_products` denies anonymous reads | PASS — 12/12 tenant relations now |
 | Product scene reference accepted by Gemini | **UNANSWERED** — `npm run probe:scene-ref` still dies on billing, 2026-08-07 |
 
@@ -300,6 +319,58 @@ users. Do not present it as full RLS verification.
 ---
 
 ## 7. Traps — every one of these cost real time
+
+**Prepending `https://` to a URL is not a scheme check, and it accepted
+`file:///etc/passwd`.** `normalizeSiteUrl` tested for `^https?://` and prepended
+`https://` when it did not match — so `file:///etc/passwd` became
+`https://file:///etc/passwd`, which `new URL()` parses perfectly happily as an
+https URL to a host called `file`, and it sailed past the protocol check that came
+next. **Any named scheme must be validated BEFORE anything is prepended**; only a
+bare `dominio.com.ar` gets a scheme put in front of it. Caught by
+`npm run verify:website`, which is why those three cases are in it. Everything
+else about that fetch path — resolved-address filtering, per-hop redirect
+revalidation, size and time caps — is in `lib/web/safe-fetch.ts`, along with the
+DNS-rebinding gap `fetch` cannot close.
+
+**Classifying pixels as "glyph or background" by colour distance fails in the
+dangerous direction.** The legibility check first rendered the slide normally and
+excluded pixels close to the text colour, assuming those were the letters. A
+bright sky is within tolerance of white type, so the sky was discarded AS type —
+the check then measured only the dark part of the frame and reported 19.5:1 on a
+headline that had vanished. **The slide is now rendered with `color: transparent`
+on its text runs**, so every measured pixel is genuinely background and nothing is
+guessed. Use `transparent`, never `visibility: hidden`: a CTA pill carries its own
+background colour on the very element that holds its text, and hiding it would
+measure the photograph behind the pill.
+
+**Contrast is judged on the WORST slice, not the mean.** A headline crossing from
+a scrim onto a bright sky averages to "fine" while being unreadable across half
+its length. A percentile also ignores the handful of blown-out pixels a strict
+maximum would trip over. And WCAG's size thresholds apply to **the size a phone
+shows**, not the slide's own pixels: an 88px headline lands near 33px on a 400px
+screen (large text, 3:1), a 25px detail near 9px (4.5:1). Backwards, this waves
+through exactly the small print that is hardest to read.
+
+**Dropping white and black as "colours every site has" loses the background and
+the body text.** The website importer excluded them as noise, and supabase.com
+came back as a dark-green background with green body text and a neutral grey as
+the accent — every token misassigned, from a site whose palette is unmistakable.
+Count everything; decide ROLES afterwards, by luminance band and by chroma. The
+bands must be narrow: a 0.15 "dark" cutoff swallowed a brand green sitting at
+luminance 0.09 and made it the background.
+
+**A `font-family` capture class that excludes quotes matches nothing.**
+`/font-family\s*:\s*([^;}"']+)/` cannot match the opening quote of
+`font-family: "Inter", Arial` — so every quoted family, which is most of them,
+was silently invisible. Capture to the delimiter and strip the quotes from the
+result.
+
+**Accented named entities have to be decoded before text reaches a model.**
+A page writing `Maip&uacute;` reached the prompt as `Maip&uacute;`, and a model
+reading mangled Spanish writes a tone of voice based on mangled Spanish. The
+numeric forms alone are not enough; `&aacute;` and friends are what Spanish
+pages actually emit. Note the named table must be case-SENSITIVE — `&Aacute;`
+and `&aacute;` are different characters.
 
 **Storage RLS policy form.** Table policies use `x in (select public.current_workspace_ids())`
 and work. Storage policies **must** use
@@ -474,6 +545,11 @@ npm run db:types       # regenerate lib/supabase/database.types.ts
 npm run verify:rls     # anonymous-access leak check
 npm run verify:products  # 31 product assertions, no provider needed
 npm run verify:schedule  # 59 calendar assertions, run twice (local zone + UTC)
+npm run verify:legibility  # 26 contrast assertions against known bitmaps
+npm run verify:website     # 66 SSRF + extraction assertions, no network
+npm run verify:search      # 22 snippet assertions
+npm run probe:variants     # LIVE Claude call, ~US$0.04
+npm run probe:website <url># LIVE fetch + Claude call, ~US$0.04
 npm run probe:scene-ref  # costs ONE image if the Gemini account has credit
 ```
 
@@ -793,7 +869,65 @@ has looked at them.
 
 ---
 
-## 12. Where published content comes from
+## 12. Phase 10 — four features, none of them blocked on image credit
+
+Built in one run while the Gemini account was empty. Each is committed
+separately with its own probe.
+
+### Variants — three real alternatives for one piece
+
+Until now there were two ways to change a piece you disliked: retype it, or
+regenerate the whole batch and lose the four pieces that were fine.
+
+The prompt's whole job is avoiding the obvious failure: asked for "three other
+options" a model returns the same idea three times, which is worse than nothing
+because it looks like a choice. Same fix as the published-history work — name
+the axis of difference instead of asking for difference. Each option must change
+what it ARGUES, the current piece's angle is out of bounds, and every option
+comes back labelled with its angle.
+
+Two constraints keep the options usable rather than merely different: the scene
+brief is passed as a CONSTRAINT (the background exists and is not regenerated
+for a copy change), and the brand's published angles are forbidden here too.
+Slots move together — a new headline against the old subline reads as two people
+writing.
+
+### Legibility — contrast against the rendered pixels
+
+The palette editor checks foreground token against background token, which says
+nothing about a headline on a photograph. This measures the composited slide.
+**It warns, never blocks:** the export gate refuses things that are MISSING;
+contrast is a judgement, and a tool that refuses a deliberate choice gets worked
+around. See §7 for the design that had to be thrown away and why.
+
+### Brand Kit from the client's website
+
+Paste a URL, get the form pre-filled. Colours and fonts by CODE, voice by Claude
+— counting CSS declarations is arithmetic and can be asserted; a model asked to
+find brand colours occasionally invents one. It never saves: it fills the form
+and stops, and the model's own confidence is shown next to its output.
+
+SSRF is the real risk and §7 carries the trap. **Known limit:** only hex and
+`rgb()` are read, so a site written in `oklch()` or `hsl()` yields fewer
+colours — measured against supabase.com, where the green and the neutrals came
+through and the true near-black background did not.
+
+### Search over everything written
+
+`search_content` is a `security invoker` Postgres function, so every RLS
+policy applies inside it. It covers caption, CTA, hashtags, the on-image slot
+copy and the batch title and brief, with Spanish stemming and
+`websearch_to_tsquery` (quoted phrases, `-exclusions`, and it never raises on
+malformed input — which is what makes it safe to hand raw user text).
+
+**Performance, honestly:** it computes a tsvector per candidate row on every
+search — a sequential scan with no index. Deliberate for an archive of thousands
+of rows. When it stops being fast the fix is mechanical and written down in the
+migration: stored generated tsvector columns plus GIN indexes.
+
+---
+
+## 13. Where published content comes from
 
 Today: **pasted in by hand** at `/marcas/[id]/historial`. The table carries `source` and
 `external_id` with a partial unique index precisely so a future sync updates in place
@@ -828,7 +962,7 @@ in the prompt.
 
 ---
 
-## 13. What is left
+## 14. What is left
 
 **Done since Phase 6:** the app is **deployed on Vercel** at
 `content-nine-neon.vercel.app`, **Google OAuth is configured**, and — the big one —

@@ -661,6 +661,23 @@ export type Database = {
     Functions: {
       current_workspace_ids: { Args: never; Returns: string[] }
       current_workspace_ids_text: { Args: never; Returns: string[] }
+      jsonb_values_text: { Args: { doc: Json }; Returns: string }
+      search_content: {
+        Args: { brand_filter?: string; max_results?: number; query: string }
+        Returns: {
+          batch_id: string
+          batch_title: string
+          brand_id: string
+          brand_name: string
+          caption: string
+          created_at: string
+          post_id: string
+          post_type: Database["public"]["Enums"]["post_type"]
+          rank: number
+          scheduled_on: string
+          slide_text: string
+        }[]
+      }
     }
     Enums: {
       background_status: "pending" | "queued" | "running" | "ready" | "failed"
