@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Search } from "lucide-react";
+import { Loader2, Search } from "lucide-react";
 import { buildSnippet, searchTerms } from "@/lib/search/snippet";
-import { formatDay } from "@/lib/format";
-import { formatRelative } from "@/lib/format";
+import { formatDay, formatRelative } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -80,6 +80,7 @@ export function SearchPanel({
   const router = useRouter();
   const [draft, setDraft] = useState(query);
   const [brand, setBrand] = useState(brandId);
+  const [pending, startTransition] = useTransition();
 
   /*
     The query lives in the URL.
@@ -87,12 +88,22 @@ export function SearchPanel({
     Not for cleverness: a search someone wants to send to a colleague, or come
     back to tomorrow, has to be a link. It also means the results are rendered
     on the server, so the first paint already has them.
+
+    Wrapped in a transition so the search reports itself. Without one, pressing
+    Buscar produced no visible change at all until the server answered — the
+    route's own loading.tsx does not help here, because this is a searchParam
+    change on the SAME segment and React deliberately keeps the current UI
+    during a transition rather than falling back. So the button spins and the
+    results it is about to replace go quiet.
   */
   function run(nextQuery: string, nextBrand: string) {
     const params = new URLSearchParams();
     if (nextQuery.trim()) params.set("q", nextQuery.trim());
     if (nextBrand && nextBrand !== ALL) params.set("marca", nextBrand);
-    router.push(params.toString() ? `/buscar?${params}` : "/buscar");
+
+    startTransition(() => {
+      router.push(params.toString() ? `/buscar?${params}` : "/buscar");
+    });
   }
 
   const terms = searchTerms(query);
@@ -148,9 +159,13 @@ export function SearchPanel({
           </div>
         ) : null}
 
-        <Button type="submit" variant="secondary">
-          <Search className="size-4" />
-          Buscar
+        <Button type="submit" variant="secondary" disabled={pending}>
+          {pending ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Search className="size-4" />
+          )}
+          {pending ? "Buscando…" : "Buscar"}
         </Button>
       </form>
 
@@ -167,7 +182,15 @@ export function SearchPanel({
           {brand !== ALL ? " en esta marca" : ""}. Probá con menos palabras.
         </p>
       ) : (
-        <div className="space-y-3">
+        // Dimmed rather than replaced: these are the results for the PREVIOUS
+        // query and they stay readable until the new ones arrive, which is the
+        // whole reason this is a transition.
+        <div
+          className={cn(
+            "space-y-3 transition-opacity",
+            pending && "pointer-events-none opacity-50",
+          )}
+        >
           <p className="text-xs text-muted-foreground">
             {hits.length} {hits.length === 1 ? "pieza" : "piezas"}
             {/*

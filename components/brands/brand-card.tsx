@@ -45,19 +45,34 @@ export function BrandCard({ brand }: { brand: BrandCardData }) {
   const logoUrl = publicAssetUrl(brand.logo_path);
   const tokens = recordToPalette(brand.palette).slice(0, 6);
 
+  /*
+    The `finally` is the point.
+
+    A server action returns a result object for the failures it anticipates, but
+    it can still THROW — the tab going offline mid-call is the ordinary case.
+    With the reset written inline after the await, that throw skipped it and
+    left the dialog open with a permanently disabled, permanently spinning
+    "Eliminando…" button and no way back except a reload.
+  */
   async function handleDelete() {
     setDeleting(true);
-    const result = await deleteBrand(brand.id);
-    setDeleting(false);
+    try {
+      const result = await deleteBrand(brand.id);
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
 
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
+      setConfirmOpen(false);
+      toast.success("Marca eliminada.");
+      router.refresh();
+    } catch (cause) {
+      toast.error(
+        cause instanceof Error ? cause.message : "No se pudo eliminar la marca.",
+      );
+    } finally {
+      setDeleting(false);
     }
-
-    setConfirmOpen(false);
-    toast.success("Marca eliminada.");
-    router.refresh();
   }
 
   return (

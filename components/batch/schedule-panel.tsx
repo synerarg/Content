@@ -64,37 +64,53 @@ export function SchedulePanel({
       return;
     }
 
+    // try/finally on every one of these: a server action can throw, and the
+    // reset written inline after the await would be skipped, leaving the button
+    // disabled and spinning with no way back.
     setPending(true);
-    const result = await scheduleBatch(batchId, {
-      startOn,
-      everyDays,
-      skipWeekends,
-      time: time || DEFAULT_TIME,
-    });
-    setPending(false);
+    try {
+      const result = await scheduleBatch(batchId, {
+        startOn,
+        everyDays,
+        skipWeekends,
+        time: time || DEFAULT_TIME,
+      });
 
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+
+      onScheduled(result.assigned, time || DEFAULT_TIME);
+      toast.success(
+        `${result.assigned.length} pieza${result.assigned.length === 1 ? "" : "s"} en el calendario.`,
+      );
+    } catch (cause) {
+      toast.error(
+        cause instanceof Error ? cause.message : "No se pudo programar el lote.",
+      );
+    } finally {
+      setPending(false);
     }
-
-    onScheduled(result.assigned, time || DEFAULT_TIME);
-    toast.success(
-      `${result.assigned.length} pieza${result.assigned.length === 1 ? "" : "s"} en el calendario.`,
-    );
   }
 
   async function handleClear() {
     setPending(true);
-    const result = await clearBatchSchedule(batchId);
-    setPending(false);
-
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
+    try {
+      const result = await clearBatchSchedule(batchId);
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      onCleared();
+      toast.success("Se quitaron las fechas. El contenido queda igual.");
+    } catch (cause) {
+      toast.error(
+        cause instanceof Error ? cause.message : "No se pudieron quitar las fechas.",
+      );
+    } finally {
+      setPending(false);
     }
-    onCleared();
-    toast.success("Se quitaron las fechas. El contenido queda igual.");
   }
 
   return (

@@ -606,7 +606,24 @@ export function BatchDetail({
 
   async function handleDelete() {
     setDeleting(true);
-    const result = await deleteBatch(batchId);
+
+    /*
+      Only the FAILURE path resets the flag, and that is deliberate here: the
+      success path navigates away, so clearing it would flash the button back to
+      "Eliminar" for a frame on a batch that is already gone. A throw is a
+      failure, so it resets too.
+    */
+    let result: Awaited<ReturnType<typeof deleteBatch>>;
+    try {
+      result = await deleteBatch(batchId);
+    } catch (cause) {
+      setDeleting(false);
+      toast.error(
+        cause instanceof Error ? cause.message : "No se pudo eliminar el lote.",
+      );
+      return;
+    }
+
     if (!result.ok) {
       setDeleting(false);
       toast.error(result.error);

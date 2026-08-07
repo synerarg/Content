@@ -8,7 +8,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function EditarMarcaLoading() {
   return (
     <>
-      <PageHeaderSkeleton />
+      {/* Two: Productos and Historial publicado. */}
+      <PageHeaderSkeleton actions={2} />
       <div className="px-6 pb-16 md:px-8">
         {Array.from({ length: 4 }, (_, section) => (
           <div

@@ -368,16 +368,25 @@ function ProductRow({
 
   async function handleDelete() {
     setDeleting(true);
-    const result = await deleteProduct(product.id);
-    setDeleting(false);
-    setConfirming(false);
+    try {
+      const result = await deleteProduct(product.id);
+      setConfirming(false);
 
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Producto eliminado.");
+      router.refresh();
+    } catch (cause) {
+      // In `finally`, so a throw does not leave the confirm dialog stuck on a
+      // disabled, spinning "Eliminando…" with no way out but a reload.
+      toast.error(
+        cause instanceof Error ? cause.message : "No se pudo eliminar el producto.",
+      );
+    } finally {
+      setDeleting(false);
     }
-    toast.success("Producto eliminado.");
-    router.refresh();
   }
 
   return (

@@ -12,15 +12,35 @@ import { Skeleton } from "@/components/ui/skeleton";
   in step with each other; several routes share the same card and grid metrics.
 */
 
-/** Mirrors PageHeader: h1 (28px) + p (20px) with space-y-1, inside py-5. */
-export function PageHeaderSkeleton({ withAction = false }: { withAction?: boolean }) {
+/**
+ * Mirrors PageHeader: h1 (28px) + p (20px) with space-y-1, inside py-5.
+ *
+ * `actions` is a COUNT, not a boolean, because a header with two buttons and a
+ * skeleton with one still jumps — just less. `/marcas/[id]` grew a second
+ * button when products landed and the skeleton kept promising none.
+ */
+export function PageHeaderSkeleton({
+  withAction = false,
+  actions,
+}: {
+  withAction?: boolean;
+  actions?: number;
+}) {
+  const count = actions ?? (withAction ? 1 : 0);
+
   return (
     <header className="flex flex-wrap items-start justify-between gap-4 border-b border-border px-6 py-5 md:px-8">
       <div className="space-y-1">
         <Skeleton className="h-7 w-44" />
         <Skeleton className="h-5 w-[28rem] max-w-full" />
       </div>
-      {withAction ? <Skeleton className="h-9 w-36 rounded-md" /> : null}
+      {count > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          {Array.from({ length: count }, (_, i) => (
+            <Skeleton key={i} className="h-9 w-36 rounded-md" />
+          ))}
+        </div>
+      ) : null}
     </header>
   );
 }

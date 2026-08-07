@@ -121,18 +121,27 @@ function PendingRow({
     }
 
     setSaving(true);
-    const result = await setPostSchedule(piece.id, {
-      scheduled_on: day,
-      scheduled_time: time || null,
-    });
-    setSaving(false);
+    try {
+      const result = await setPostSchedule(piece.id, {
+        scheduled_on: day,
+        scheduled_time: time || null,
+      });
 
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Pieza programada.");
+      onScheduled();
+    } catch (cause) {
+      // Reset in `finally`: a server action that throws would otherwise leave
+      // this row's button disabled and spinning for good.
+      toast.error(
+        cause instanceof Error ? cause.message : "No se pudo programar la pieza.",
+      );
+    } finally {
+      setSaving(false);
     }
-    toast.success("Pieza programada.");
-    onScheduled();
   }
 
   return (

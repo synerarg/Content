@@ -61,6 +61,17 @@ export function useRenderAssets(brand: EditorBrand | null): RenderAssets {
     if (!brand) {
       setFontCss("");
       setLogoUrl(null);
+      /*
+        Ready, not stuck.
+
+        `ready` means "there is nothing left to prepare", and with no brand
+        there is nothing. Returning without it left the flag false forever:
+        anything gating on it — the export button, the "Cargando tipografías"
+        spinner — would wait for a load that was never going to start. The
+        template gallery is the caller that can genuinely pass null, when a
+        workspace has no brands yet.
+      */
+      setReady(true);
       return;
     }
 
