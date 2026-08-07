@@ -232,16 +232,36 @@ template automatically teaches the prompts its slot names and character limits.
 | Brand readiness, 11 asserts | PASS — each gap detected individually, a freshly created brand correctly blocks on art direction, null input does not throw |
 | Error taxonomy, 17 asserts | PASS — explicit codes beat heuristics; real Gemini/fal/Anthropic messages classify correctly; aborts never report as failures; no English in any user-facing string |
 
-**NOT verified — the important gap:**
+**The PNG export — CLOSED, 2026-08-06.**
 
-> **The SVG→canvas→PNG step has never been verified end-to-end.**
-> `html-to-image` resolves its image load inside a `requestAnimationFrame` callback, and
-> **rAF never fires in a hidden tab**. The Claude Browser pane doesn't composite, so
-> `toPng` hangs there forever. Confirmed directly: with `document.hidden === true`, rAF
-> never fires while `Image.onload` still does.
+> The SVG→canvas→PNG step was this project's one significant unverified gap from Phase 2
+> onward. **The account owner confirmed the single-PNG export from `/editor` working
+> against the production deployment on 2026-08-06.**
 >
-> Everything *upstream* of that step is verified. The final rasterization can only be
-> confirmed by a human with a visible browser tab.
+> That closes the part that mattered, because it is the part that could silently produce a
+> WRONG file: fonts embedding into the `<foreignObject>` rather than falling back to a
+> system typeface, the canvas not being tainted by cross-origin Storage images, and the
+> output landing at exactly 1080×1350. All three are now proven end to end in production.
+>
+> It could never be verified from an agent session, and that limitation still holds for
+> anyone working on this: `html-to-image` resolves its image load inside a
+> `requestAnimationFrame` callback, and **rAF never fires in a hidden tab**. The Claude
+> Browser pane does not composite, so `toPng` hangs there forever rather than failing.
+> Confirmed directly at the time: with `document.hidden === true`, rAF never fires while
+> `Image.onload` still does.
+>
+> **Consequence for future work:** any change to `lib/export/rasterize.ts`, to the font
+> embedding in `lib/render/brand-tokens.ts`, or to a template's markup re-opens this. It
+> cannot be regression-tested from a session — it needs a human with a visible tab. The
+> checks that CAN run from here are the dimension assertion in the export path and the
+> `readPngDimensions` verification, both of which already run on every export.
+>
+> **Still unconfirmed: the batch ZIP** from `/contenido/[id]`. It calls the same
+> `rasterizeSlide`, so the risky mechanism above is settled — what it adds is orchestration
+> that has never run for real: a loop over `slideRefs` into components mounted by
+> `OffscreenSlide` (a different rendering context from the visible preview), the per-slide
+> dimension assertion at scale, and the jszip assembly and download. Lower risk than the
+> original gap, and a different kind: a failure there would be loud rather than silent.
 
 **Checkpoints confirmed by the user:** Phase 0 (auth/shell), Phase 1 (brands, logo +
 fonts saved after the storage-policy fix). **Phases 2, 3, 4, 5, 6 were never confirmed** —
@@ -334,6 +354,28 @@ dutifully gives it a fresh workspace. Nothing is lost, but it presents exactly a
 loss: you sign in with Google and every brand is gone. The fix is the "link identities
 with the same email" setting plus confirming the original account's address — **not**
 recreating the brands. `DEPLOY.md` §4.5.
+
+**Supabase IGNORES a redirect URL that is not allow-listed — it does not reject it.** It
+falls back to the Site URL instead, silently. `login-form.tsx` passes a correct
+`emailRedirectTo` built from `window.location.origin`, and signup confirmation emails
+still arrived pointing at `localhost:3000`, because the production hostname was missing
+from Authentication → URL Configuration → Redirect URLs. Nothing in the app or the email
+says the value was discarded. **When an auth link lands somewhere unexpected, what you are
+looking at is the Site URL, and the cause is the allow-list.**
+
+**A green Vercel deploy proves nothing about the env vars.** The project was deployed with
+**zero** environment variables set and the build passed — because nothing calls
+`supabaseEnv()` at build time. Every page under `(app)` is dynamic, so the first thing to
+touch it is the middleware, at request time, where it throws and Vercel answers
+`MIDDLEWARE_INVOCATION_FAILED`: a blank 500 on every route including `/login`, with the
+real reason only in the runtime logs. Look there for the literal string
+`Missing Supabase environment variable(s)` — it is unmistakable.
+
+Two things that make this worse than it sounds. `NEXT_PUBLIC_*` values are **inlined at
+build time**, so saving the variable does not fix an existing deployment — it needs a
+redeploy, without the build cache. And variables scoped to Production only leave every
+preview deployment broken in exactly the same way, which reads as "it works on prod but
+the branch is broken".
 
 **Vercel's proxy makes `new URL(request.url).origin` the wrong host.** The function sees
 an internal hostname, so an OAuth callback built from `origin` redirects users somewhere
@@ -579,22 +621,27 @@ in the prompt.
 
 ## 11. What is left
 
-**Done since Phase 6:** the app is **deployed on Vercel** and **Google OAuth is
-configured**. `DEPLOY.md` §4 was expanded in the process with the two things that actually
-bit — see the OAuth traps in §7.
+**Done since Phase 6:** the app is **deployed on Vercel** at
+`content-nine-neon.vercel.app`, **Google OAuth is configured**, and — the big one —
+**the PNG export is confirmed working** (2026-08-06, see §6). That was the project's one
+significant unverified gap and it is now closed. `DEPLOY.md` §4 was expanded along the way
+with the two OAuth problems that actually bit, and §2 with the env-var trap that took the
+first deployment down; both are in §7.
 
 Still open:
 
-1. **Confirm the PNG export** (see §6). Unchanged, and still the most important open item:
-   it is the foundation of Phases 2–5 and has never run end to end.
-2. **Look at the Phase 6 and 7 screens once** (see §6) — `/configuracion`, the loading
+1. **Look at the Phase 6 and 7 screens once** (see §6) — `/configuracion`, the loading
    skeletons, the mobile tab strip, the recipe builder and the queue progress strip have
    all been verified by typecheck, lint, build and probes, but none has been seen by a
    human or a screenshot.
-3. **Run one real batch queue end to end.** The recipe half is verified against the live
-   API; the queue's rate-limit path is not — it needs a run that actually trips a 429 to
-   confirm the backoff, the countdown and the resume-after-reload behave as intended.
-4. **Carousel background cohesion** (see §10) — needs a prompt-level solution, since
+2. **Run one real batch end to end** — which covers the two remaining unknowns at once,
+   and is the likeliest source of a surprise:
+   - The **queue's rate-limit path**. The recipe half is verified against the live API;
+     the backoff, the countdown and resume-after-reload need a run that actually trips a
+     429, which a full week of content will.
+   - The **ZIP export** (see §6). Same rasterizer as the confirmed single PNG, but the
+     loop over offscreen-mounted slides and the jszip assembly have never run for real.
+3. **Carousel background cohesion** (see §10) — needs a prompt-level solution, since
    Gemini ignores seeds.
 
 **Vercel limits that shaped the design — keep them in mind**

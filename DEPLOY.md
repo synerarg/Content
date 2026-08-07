@@ -48,6 +48,18 @@ Only the two `NEXT_PUBLIC_` variables are inlined into the browser bundle.
 Everything else is read exclusively from route handlers and `server-only`
 modules, so it never leaves the function.
 
+> **A successful build does NOT mean these are set.** Nothing reads them at
+> build time, so a project with zero variables deploys green and then answers
+> `MIDDLEWARE_INVOCATION_FAILED` — a blank 500 on every route, `/login`
+> included — on the first request. This has already happened once. If you see
+> that error, check the runtime logs for `Missing Supabase environment
+> variable(s)` before looking anywhere else.
+>
+> Two follow-ons: `NEXT_PUBLIC_*` values are baked into the build, so **saving a
+> variable does not fix an existing deployment** — redeploy with the build cache
+> disabled. And tick **Preview** as well as Production, or every branch
+> deployment fails this way while production looks fine.
+
 `/configuracion` reports which of these are present once deployed — booleans
 only, never any part of a value.
 
@@ -136,18 +148,29 @@ changing.
 
 ### 4.4 Supabase → Authentication → URL Configuration
 
-- **Site URL**: the production URL, e.g. `https://synera-content-studio.vercel.app`
+This section governs **every** link Supabase emails, not just OAuth — signup
+confirmations and password resets come from here too.
+
+- **Site URL**: `https://content-nine-neon.vercel.app`
 - **Redirect URLs** — one line each:
 
   ```
+  https://content-nine-neon.vercel.app/**
   http://localhost:3000/**
-  https://synera-content-studio.vercel.app/**
   https://*-<your-vercel-scope>.vercel.app/**
   ```
 
 The third line is what makes preview deployments work; without it every preview
 sign-in bounces with `redirect_to not allowed`. Supabase matches these as
 patterns, so the `/**` suffix matters.
+
+> **A URL that is not on the allow-list is IGNORED, not rejected.** Supabase
+> silently falls back to the Site URL instead — which is why a signup
+> confirmation email can arrive pointing at `localhost:3000` even though the
+> code passes a correct `emailRedirectTo` built from the live hostname. This
+> already happened once. If a confirmation link goes somewhere unexpected, the
+> allow-list is the first thing to check, and the Site URL is what you are
+> actually seeing.
 
 The app builds its own `redirectTo` from the hostname the browser is actually on
 (`components/auth/login-form.tsx`), and the callback rebuilds it from

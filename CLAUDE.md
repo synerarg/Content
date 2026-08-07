@@ -11,6 +11,11 @@ form, views bypassing RLS, canvas tainting, font embedding, structured-output le
 limits, Storage discarding the content type you pass it, and several Windows/PowerShell
 and provider-API quirks.
 
-Phases 0–6 of the build plan are complete. What remains is listed in the last section of
-`HANDOFF.md` and needs the account owner: Google OAuth credentials, the Vercel project,
-and confirming the PNG export by hand. `DEPLOY.md` has the deployment steps.
+Phases 0–7 are complete and the app is **live on Vercel**, with Google OAuth configured
+and the PNG export confirmed working by hand — that last one was the project's long-
+standing unverified gap. Phase 7 added batch recipes, the background queue, published-
+history dedup, and the three levels of the Nielsen heuristics audit.
+
+What remains is in the last section of `HANDOFF.md`. Nothing there is blocking; the
+largest item is that the background queue's rate-limit path has never met a real run.
+`DEPLOY.md` has the deployment steps.
