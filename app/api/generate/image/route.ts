@@ -46,6 +46,17 @@ const requestSchema = z.object({
    * template from these same bytes; the model never draws it.
    */
   productId: z.uuid().nullable().optional(),
+  /**
+   * Which slide this is for, when it is for a stored one.
+   *
+   * Used only to find a CAROUSEL ANCHOR: the background already generated for
+   * the first slide of the same piece, handed to the model so the set reads as
+   * one shoot. Resolved server-side from this id rather than sent by the
+   * browser, because the queue writes each background before starting the next
+   * request — so the database always has the freshest answer and a stale tab
+   * cannot point a slide at a background that has been replaced since.
+   */
+  slideId: z.uuid().nullable().optional(),
 });
 
 export async function POST(request: Request) {
@@ -57,7 +68,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const { brandId, brief, format, templateSlug, seed, productId } = parsed.data;
+  const { brandId, brief, format, templateSlug, seed, productId, slideId } =
+    parsed.data;
 
   let workspaceId: string;
   try {
@@ -111,6 +123,8 @@ export async function POST(request: Request) {
   */
   let referenceImage: ReferenceImage | null = null;
   let referenceNote: string | null = null;
+  /** Position within the carousel, so each frame is briefed as a different shot. */
+  let slideIndex = 0;
 
   if (hasProduct && productId) {
     if (!provider.supportsReferenceImage) {
@@ -144,7 +158,62 @@ export async function POST(request: Request) {
           if (!sniffed) {
             referenceNote = "la foto del producto no es una imagen reconocible";
           } else {
-            referenceImage = { bytes, contentType: sniffed };
+            referenceImage = { bytes, contentType: sniffed, kind: "product" };
+          }
+        }
+      }
+    }
+  }
+
+  /*
+    The carousel anchor.
+
+    Only when nothing else is already attached — and by construction nothing
+    can be, since carousel slides use the cover/body templates and those
+    composite no product.
+
+    The anchor is the background of position 0 of the same piece. Regenerating
+    position 0 itself correctly finds none: it IS the anchor, and a slide
+    referencing itself would ask the model to redraw the picture it is
+    replacing.
+  */
+  if (!referenceImage && slideId && provider.supportsReferenceImage) {
+    const { data: slide } = await supabase
+      .from("slides")
+      .select("position, post_id, posts!inner(type)")
+      .eq("id", slideId)
+      .maybeSingle();
+
+    const postType = (slide?.posts as { type?: string } | null)?.type;
+
+    if (slide && postType === "carousel" && slide.position > 0) {
+      slideIndex = slide.position;
+      const { data: anchor } = await supabase
+        .from("slides")
+        .select("background_path")
+        .eq("post_id", slide.post_id)
+        .eq("position", 0)
+        .not("background_path", "is", null)
+        .maybeSingle();
+
+      if (!anchor?.background_path) {
+        // Normal, not exceptional: the first slide has not been generated yet,
+        // or its own generation failed. The scene is made without an anchor.
+        referenceNote = "la primera placa del carrusel todavía no tiene fondo";
+      } else {
+        const { data: file, error: downloadError } = await supabase.storage
+          .from("generated")
+          .download(anchor.background_path);
+
+        if (downloadError || !file) {
+          referenceNote = `no se pudo leer el fondo de la primera placa: ${downloadError?.message ?? "sin datos"}`;
+        } else {
+          const bytes = new Uint8Array(await file.arrayBuffer());
+          const sniffed = sniffImageType(bytes);
+          if (sniffed) {
+            referenceImage = { bytes, contentType: sniffed, kind: "scene" };
+          } else {
+            referenceNote = "el fondo de la primera placa no es una imagen legible";
           }
         }
       }
@@ -159,10 +228,12 @@ export async function POST(request: Request) {
     format,
     templateSlug,
     hasProduct,
-    // Only claimed when the bytes are genuinely going along. Telling the model
+    // Only claimed when the bytes are genuinely going along, and the KIND
+    // decides what the prompt says the attachment is for. Telling the model
     // about "the attached image" with nothing attached is an instruction it
     // cannot follow.
-    hasReferenceImage: referenceImage !== null,
+    referenceKind: referenceImage?.kind ?? null,
+    slideIndex,
   });
 
   const started = Date.now();
@@ -228,6 +299,7 @@ export async function POST(request: Request) {
           being a shrug.
         */
         referenceSent: referenceImage !== null,
+        referenceKind: referenceImage?.kind ?? null,
         referenceNote,
         width: size.width,
         height: size.height,

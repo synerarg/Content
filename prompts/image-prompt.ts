@@ -28,8 +28,13 @@ import type { FormatKey } from "@/templates/types";
   same olive green. A set the colour of the product is a set the product
   disappears into, and the product is the subject. Verified live: the same
   reference under .4 keeps the light and drops the colour match.
+
+  2026-08-07.5 — carousel continuity. A carousel's slides were four unrelated
+  photographs; seeds cannot fix it because Gemini ignores them. The first
+  slide's background now goes to every later slide as a reference, asking for
+  the same PLACE and a different FRAME.
 */
-export const IMAGE_PROMPT_VERSION = "2026-08-07.4";
+export const IMAGE_PROMPT_VERSION = "2026-08-07.5";
 
 export type ArtDirection = {
   photographic_style: string;
@@ -149,6 +154,68 @@ const SCENE_REFERENCE_DIRECTIVE = [
 ].join(" ");
 
 /*
+  CAROUSEL CONTINUITY
+
+  A carousel's slides were four unrelated photographs. The shared
+  `background_brief` gave them a shared subject and nothing else — different
+  room, different light, different palette — and seeds cannot fix it, because
+  Gemini ignores them entirely (HANDOFF §10).
+
+  What DOES fix it is the mechanism built for product scenes: the first slide's
+  background is handed to the model as a reference for every slide after it.
+
+  The hard part is asking for the same PLACE without asking for the same PICTURE.
+  A reference with no instruction produces a near-copy, and four near-identical
+  frames are a different kind of bad carousel — so the difference is named as
+  explicitly as the sameness, and what may change (angle, crop, distance) is
+  listed separately from what may not (place, light, palette, materials).
+*/
+const CAROUSEL_CONTINUITY_DIRECTIVE = [
+  "An image is attached: it is another photograph from THIS SAME SET, taken moments earlier.",
+  "Keep the same location, the same light, the same time of day, the same colour palette and the same materials, so the two read as one shoot.",
+  "But this is a DIFFERENT FRAME, not a copy: change the camera angle, the distance and what is in shot.",
+  "Do not reproduce the attached image or repeat its composition.",
+].join(" ");
+
+/*
+  A NAMED shot per slide, because "a different frame" was not enough.
+
+  Measured: with the continuity directive alone, slide 2 came back as very
+  nearly the anchor's framing with a person moved, while slide 3 did genuinely
+  move in. Cohesion was solved and variety was a coin flip — and four copies of
+  one photograph is as bad a carousel as four unrelated ones.
+
+  So each slide is told WHICH shot it is, the way a photographer would be
+  briefed on a shoot: wide, detail, opposite angle, low. Concrete instructions
+  a model can follow, instead of an abstract instruction to differ.
+
+  Indexed from slide 1 — slide 0 is the anchor and gets none of this — and it
+  wraps, so a carousel of eight simply revisits the cycle from a different
+  starting scene.
+*/
+const CAROUSEL_FRAMING = [
+  "This frame is a WIDE shot: step back and show more of the room than the attached image does.",
+  "This frame is a CLOSE detail: move in on one surface or object within the same space, filling the frame with it.",
+  "This frame is shot from a LOW angle, close to a surface, with the space receding behind it.",
+  "This frame is shot from the OPPOSITE side of the room, looking back the other way.",
+];
+
+/*
+  The order is not arbitrary, and the last entry is the weak one.
+
+  Measured over a four-slide run: WIDE and CLOSE DETAIL both produced genuinely
+  different frames of the same place. OPPOSITE SIDE did not — it came back close
+  to the wide shot. That is explicable rather than mysterious: the model can see
+  only one photograph, so it has no information about what is BEHIND the camera
+  and falls back on re-rendering the view it knows.
+
+  So the two that work run first, LOW ANGLE — which is derivable from the same
+  view — runs third, and OPPOSITE SIDE runs fourth, where only a carousel of
+  five or more slides reaches it. Reordering is measured; the entries themselves
+  are unchanged from the run.
+*/
+
+/*
   What separates a photograph from a stock image.
 
   Without this the model reliably produces the archetypal AI office photo:
@@ -174,7 +241,8 @@ export function composeImagePrompt({
   format,
   templateSlug,
   hasProduct = false,
-  hasReferenceImage = false,
+  referenceKind = null,
+  slideIndex = 0,
 }: {
   brief: string;
   artDirection: ArtDirection;
@@ -190,15 +258,22 @@ export function composeImagePrompt({
    */
   hasProduct?: boolean;
   /**
-   * Whether the product photo is actually TRAVELLING with this request.
+   * What is actually TRAVELLING with this request, if anything.
    *
-   * Separate from `hasProduct` on purpose. A piece can carry a product while the
-   * configured provider cannot take a reference image (fal today), and telling
-   * the model about "the attached image" when nothing is attached is a
-   * instruction it cannot follow — which is worse than saying nothing. The route
-   * asks the provider before setting this.
+   * Null unless bytes are genuinely attached. Separate from `hasProduct` on
+   * purpose: a piece can carry a product while the configured provider cannot
+   * take a reference image at all (fal today), and telling a model about "the
+   * attached image" when nothing is attached is an instruction it cannot
+   * follow — worse than saying nothing. The route asks the provider first.
    */
-  hasReferenceImage?: boolean;
+  referenceKind?: "product" | "scene" | null;
+  /**
+   * This slide's position within its carousel, 0-based.
+   *
+   * Only consulted for a `scene` reference, where it picks which named shot
+   * this frame should be. Slide 0 is the anchor and never has one.
+   */
+  slideIndex?: number;
 }): string {
   const parts: string[] = [];
 
@@ -232,7 +307,15 @@ export function composeImagePrompt({
 
   // 6. What the attached photograph is for, immediately after the rule it is
   //    most likely to undermine.
-  if (hasReferenceImage) parts.push(SCENE_REFERENCE_DIRECTIVE);
+  if (referenceKind === "product") {
+    parts.push(SCENE_REFERENCE_DIRECTIVE);
+  } else if (referenceKind === "scene") {
+    parts.push(CAROUSEL_CONTINUITY_DIRECTIVE);
+    // Slide 1 gets the first shot in the cycle, so the offset is index - 1.
+    const framing =
+      CAROUSEL_FRAMING[(Math.max(1, slideIndex) - 1) % CAROUSEL_FRAMING.length];
+    if (framing) parts.push(framing);
+  }
 
   // 7. Brand-specific exclusions, then the non-negotiable ones.
   const avoid = artDirection.avoid.map((item) => item.trim()).filter(Boolean);

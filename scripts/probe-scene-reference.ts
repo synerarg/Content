@@ -152,7 +152,11 @@ async function main() {
     process.exitCode = 1;
     return;
   }
-  const reference: ReferenceImage = { bytes: productBytes, contentType: sniffed };
+  const reference: ReferenceImage = {
+    bytes: productBytes,
+    contentType: sniffed,
+    kind: "product",
+  };
 
   // ---------------------------------------------------------------------
   const withoutReference = composeImagePrompt({
@@ -161,7 +165,7 @@ async function main() {
     format: "feed",
     templateSlug: "product-hero",
     hasProduct: true,
-    hasReferenceImage: false,
+    referenceKind: null,
   });
 
   const withReference = composeImagePrompt({
@@ -170,7 +174,7 @@ async function main() {
     format: "feed",
     templateSlug: "product-hero",
     hasProduct: true,
-    hasReferenceImage: true,
+    referenceKind: "product",
   });
 
   console.log("--- 2. Escena SIN referencia");

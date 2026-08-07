@@ -189,6 +189,9 @@ export function useBackgroundQueue({
               format: item.format,
               templateSlug: item.templateSlug,
               productId: item.productId ?? null,
+              // Lets the route find the carousel anchor: the background already
+              // generated for the first slide of this same piece.
+              slideId: item.slideId,
             }),
           });
         } catch (cause) {

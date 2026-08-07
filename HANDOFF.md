@@ -270,6 +270,9 @@ template automatically teaches the prompts its slot names and character limits.
 | Gemini accepts an INPUT image | **PASS, 2026-08-07** — `npm run probe:scene-ref` returned 200 with an image. The `{type:"image", mime_type, data}` shape is correct, so the scene reference is buildable |
 | Image prompt `2026-08-07.2`, **live before/after** | **PASS, 2026-08-07** — `npm run probe:image-prompt`, three generations off one brief. See §12 for what the images actually showed |
 | Empty-staging-area directive | **PASS, live** — the identical brief put a carafe, apples, jars and a book on the table WITHOUT the directive, and returned a completely bare surface with it |
+| Carousel cohesion, **live A/B** (`npm run probe:carousel`) | **PASS on cohesion** — four slides without an anchor were two different rooms with different grades; with one they are unmistakably the same place, light and palette |
+| Carousel variety | **PARTIAL, and recorded as such** — WIDE and CLOSE DETAIL gave genuinely different frames; OPPOSITE SIDE came back close to the wide shot |
+| Duplicate threshold calibration (`npm run probe:embeddings`) | **PASS at 0.82** — duplicado 0.8234-0.8682, mismo tema 0.7296-0.8129, no relacionado 0.7106-0.7787. The 0.0105 margin is the feature's honest limit |
 | Scene reference, **live A/B** (`npm run probe:scene-ab`) | **PASS** — handed a photo of a dark olive bottle, the scene came back EMPTY and visibly matched its hard side light. Costs ~400 input tokens |
 | Scene reference does not tint the set | **PASS after a fix the probe forced** — prompt `.3` returned a kitchen painted the bottle's own olive green. `.4` takes the light and refuses the colour; same reference, green gone |
 
@@ -1042,8 +1045,12 @@ Still open:
      429, which a full week of content will.
    - The **ZIP export** (see §6). Same rasterizer as the confirmed single PNG, but the
      loop over offscreen-mounted slides and the jszip assembly have never run for real.
-3. **Carousel background cohesion** (see §10) — needs a prompt-level solution, since
-   Gemini ignores seeds.
+3. **Carousel variety, slide 5 onward.** Cohesion is SOLVED (§12): the first slide's
+   background anchors the rest and they read as one shoot. Variety is partial — WIDE and
+   CLOSE DETAIL produce genuinely different frames, OPPOSITE SIDE does not, because the
+   model sees one photograph and has no information about what is behind the camera. It
+   now runs fourth in the cycle, so only carousels of five or more slides reach it.
+   `npm run probe:carousel --con` re-tests a wording change for four images.
 4. **Scene reference on fal.** The Gemini path is built and verified (§12). The fal
    provider IGNORES a reference and reports `referenceUsed: false`, because that account
    has had no balance since Phase 4 and nothing here has ever sent it an input image —

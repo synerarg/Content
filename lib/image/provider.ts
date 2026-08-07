@@ -30,6 +30,18 @@ export type ReferenceImage = {
   bytes: Uint8Array;
   /** The real type, sniffed from the bytes — never the one Storage recorded. */
   contentType: string;
+  /**
+   * What the attached image IS, which decides what the prompt says about it.
+   *
+   * `product` — the object that will be composited in later. Take its light,
+   *   leave it out of the frame, and do not adopt its colour.
+   * `scene`  — a background already generated for an earlier slide of the same
+   *   carousel. Same place, same session, DIFFERENT frame.
+   *
+   * The two never collide: carousel slides use the cover/body templates, which
+   * composite no product, so a slide can only ever want one kind.
+   */
+  kind: "product" | "scene";
 };
 
 export type GenerateImageParams = {
