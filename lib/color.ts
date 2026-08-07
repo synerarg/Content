@@ -36,8 +36,10 @@ function toRgb(hex: string): [number, number, number] | null {
   ];
 }
 
+export type Rgb = [number, number, number];
+
 /** Relative luminance per WCAG 2.1, on the sRGB channels. */
-function relativeLuminance(rgb: [number, number, number]): number {
+export function relativeLuminance(rgb: Rgb): number {
   const [r, g, b] = rgb.map((channel) => {
     const c = channel / 255;
     return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
@@ -55,6 +57,20 @@ export function contrastRatio(foreground: string, background: string): number | 
   const lighter = Math.max(relativeLuminance(fg), relativeLuminance(bg));
   const darker = Math.min(relativeLuminance(fg), relativeLuminance(bg));
 
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+/**
+ * Contrast between two already-decoded luminances.
+ *
+ * The pixel-level legibility check works from measured luminance rather than
+ * from a hex string — it is averaging thousands of pixels, and re-encoding that
+ * average back to hex just to parse it again would throw away precision for
+ * nothing.
+ */
+export function contrastFromLuminance(a: number, b: number): number {
+  const lighter = Math.max(a, b);
+  const darker = Math.min(a, b);
   return (lighter + 0.05) / (darker + 0.05);
 }
 

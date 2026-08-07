@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Copy, Download, Loader2, Package, Shuffle } from "lucide-react";
+import { Copy, Download, Eye, Loader2, Package, Shuffle } from "lucide-react";
 import { toast } from "sonner";
 import { OffscreenSlide, SlidePreview } from "@/components/render/slide-canvas";
 import {
@@ -20,6 +20,12 @@ import {
   type EditorBrand,
 } from "@/lib/render/use-render-assets";
 import { useProductAssets } from "@/lib/render/use-product-assets";
+import { checkSlideLegibility } from "@/lib/render/check-legibility";
+import type { LegibilityReport } from "@/lib/render/legibility";
+import {
+  LegibilityChip,
+  LegibilityDetails,
+} from "@/components/render/legibility-report";
 import {
   downloadBlob,
   rasterizeSlide,
@@ -64,6 +70,8 @@ export function SlideEditor({ brands }: { brands: EditorBrand[] }) {
   const [backgroundUrl, setBackgroundUrl] = useState<string | null>(null);
   const [productId, setProductId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [legibility, setLegibility] = useState<LegibilityReport | null>(null);
   // One dialog for the screen; only the request it carries changes.
   const [variantsFor, setVariantsFor] = useState<{
     request: VariantsRequest;
@@ -145,6 +153,37 @@ export function SlideEditor({ brands }: { brands: EditorBrand[] }) {
       toast.success("Caption copiado.");
     } catch {
       toast.error("No se pudo copiar.");
+    }
+  }
+
+  /*
+    Measured on the offscreen node, which is the one rendered at full size —
+    the visible preview is CSS-scaled, so its computed font sizes are the
+    on-screen ones and every WCAG threshold would be judged against the wrong
+    number.
+  */
+  async function handleCheckLegibility() {
+    const node = exportRef.current;
+    if (!node || !brand) return;
+
+    setChecking(true);
+    try {
+      const spec = FORMATS[format];
+      setLegibility(
+        await checkSlideLegibility({
+          node,
+          width: spec.width,
+          height: spec.height,
+          fontCss,
+          fonts: brand.fonts,
+        }),
+      );
+    } catch (cause) {
+      toast.error(
+        cause instanceof Error ? cause.message : "No se pudo revisar la legibilidad.",
+      );
+    } finally {
+      setChecking(false);
     }
   }
 
@@ -548,6 +587,25 @@ export function SlideEditor({ brands }: { brands: EditorBrand[] }) {
               product={product}
               fontCss={fontCss}
             />
+
+            <div className="flex items-center justify-between gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleCheckLegibility}
+                disabled={checking || !ready}
+              >
+                {checking ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Eye className="size-4" />
+                )}
+                {checking ? "Midiendo…" : "Revisar legibilidad"}
+              </Button>
+              <LegibilityChip report={legibility} />
+            </div>
+
+            <LegibilityDetails report={legibility} />
 
             <Button
               onClick={handleExport}

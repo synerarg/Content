@@ -6,6 +6,7 @@ import {
   Copy,
   CopyPlus,
   Loader2,
+  Eye,
   Package,
   RefreshCw,
   Shuffle,
@@ -23,6 +24,12 @@ import {
   type EditorBrand,
 } from "@/lib/render/use-render-assets";
 import { useProductAssets } from "@/lib/render/use-product-assets";
+import { checkSlideLegibility } from "@/lib/render/check-legibility";
+import type { LegibilityReport } from "@/lib/render/legibility";
+import {
+  LegibilityChip,
+  LegibilityDetails,
+} from "@/components/render/legibility-report";
 import {
   downloadBlob,
   rasterizeSlide,
@@ -158,6 +165,8 @@ export function BatchDetail({
   const [exportProgress, setExportProgress] = useState({ done: 0, total: 0 });
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [legibility, setLegibility] = useState<Record<string, LegibilityReport>>({});
   const autosave = useAutosave();
 
   /*
@@ -537,6 +546,63 @@ export function BatchDetail({
     }
   }
 
+  /*
+    Every slide in one pass, sequentially.
+
+    Not in parallel: each check rasterizes the same document, and running eight
+    at once means eight simultaneous html-to-image passes competing for the main
+    thread — slower overall, and it makes the page unresponsive while it runs.
+    At a quarter scale each one is fast enough that the loop is not the problem.
+  */
+  async function handleCheckLegibility() {
+    if (!ready) {
+      toast.error("Esperá a que terminen de cargar las tipografías.");
+      return;
+    }
+
+    setChecking(true);
+    const next: Record<string, LegibilityReport> = {};
+
+    try {
+      for (const slide of allSlides) {
+        const node = slideRefs.current[slide.id];
+        if (!node) continue;
+
+        const spec = FORMATS[slide.format];
+        next[slide.id] = await checkSlideLegibility({
+          node,
+          width: spec.width,
+          height: spec.height,
+          fontCss,
+          fonts: brand.fonts,
+        });
+      }
+
+      setLegibility(next);
+
+      const failing = Object.values(next).filter(
+        (report) => !report.ok && !report.empty,
+      ).length;
+
+      if (failing === 0) {
+        toast.success("Todas las placas se leen bien sobre su fondo.");
+      } else {
+        toast.warning(
+          `${failing} placa${failing === 1 ? "" : "s"} con poco contraste. Están marcadas abajo.`,
+        );
+      }
+    } catch (cause) {
+      // Whatever was measured before the failure is kept: a partial answer on
+      // six of eight slides is worth more than none.
+      setLegibility(next);
+      toast.error(
+        cause instanceof Error ? cause.message : "No se pudo revisar la legibilidad.",
+      );
+    } finally {
+      setChecking(false);
+    }
+  }
+
   async function handleDelete() {
     setDeleting(true);
     const result = await deleteBatch(batchId);
@@ -709,6 +775,20 @@ export function BatchDetail({
           >
             <CopyPlus className="size-4" />
             Duplicar
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleCheckLegibility}
+            disabled={checking || exporting || !ready}
+            title="Mide el contraste real de cada texto contra los píxeles de su fondo"
+          >
+            {checking ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Eye className="size-4" />
+            )}
+            {checking ? "Midiendo…" : "Revisar legibilidad"}
           </Button>
           <Button
             variant="ghost"
@@ -1031,6 +1111,20 @@ export function BatchDetail({
                           );
                         }}
                       />
+                    ) : null}
+
+                    {/*
+                      Only rendered once the slide has actually been measured.
+                      An always-present "sin revisar" chip on every slide is
+                      noise that trains people to stop reading the row.
+                    */}
+                    {legibility[slide.id] ? (
+                      <div className="space-y-1.5 px-0.5">
+                        <LegibilityChip report={legibility[slide.id]} />
+                        {!legibility[slide.id].ok ? (
+                          <LegibilityDetails report={legibility[slide.id]} />
+                        ) : null}
+                      </div>
                     ) : null}
 
                     {/*
