@@ -105,6 +105,8 @@ public by design and safe; everything else is not.
                                      — what the brand already published  (Phase 7)
 20260805001200_history_and_soft_...  slide_backgrounds (last 5 per slide) +
                                      content_batches.deleted_at  (Phase 7)
+20260805001300_products.sql          brand_products + slides.product_id
+                                     (on delete set null)  (Phase 8)
 ```
 
 ### RLS design (applies to every table)
@@ -140,7 +142,12 @@ lib/batch/use-background-queue.ts   The queue driver  (Phase 7)
 lib/ai/analyze-history.ts Extracts already-used angles from published posts  (Phase 7)
 app/api/analyze/history   Runs that extraction, stores it on the brand  (Phase 7)
 app/(app)/marcas/[id]/historial     Import published posts, run the analysis  (Phase 7)
+app/(app)/marcas/[id]/productos     Upload products, optional cut-out  (Phase 8)
+lib/products/prepare-image.ts       Browser resize + alpha detect + flat-bg cut-out  (Phase 8)
+lib/render/use-product-assets.ts    Product images -> blob URLs for the export  (Phase 8)
 scripts/verify-rls.mjs    `npm run verify:rls`
+scripts/verify-products.ts          `npm run verify:products` — 31 assertions
+scripts/probe-gemini-reference.ts   `npm run probe:scene-ref` — needs Gemini credit
 scripts/_stub-server-only.cjs       Lets probes import `server-only` modules
 ```
 
@@ -231,6 +238,9 @@ template automatically teaches the prompts its slot names and character limits.
 | Slot labels / required-slot reflection, 9 asserts | PASS — every template has a required slot and a Spanish label for every field; export gating rejects blank and whitespace-only |
 | Brand readiness, 11 asserts | PASS — each gap detected individually, a freshly created brand correctly blocks on art direction, null input does not throw |
 | Error taxonomy, 17 asserts | PASS — explicit codes beat heuristics; real Gemini/fal/Anthropic messages classify correctly; aborts never report as failures; no English in any user-facing string |
+| Products, 31 asserts (`npm run verify:products`) | PASS — registry flags, both prompts, the form schema, and the cut-out guard rails against synthetic images (product eaten / nothing found / busy corners / product fills the frame) |
+| `brand_products` denies anonymous reads | PASS — 12/12 tenant relations now |
+| Product scene reference accepted by Gemini | **UNANSWERED** — `npm run probe:scene-ref` still dies on billing, 2026-08-07 |
 
 **The PNG export — CLOSED, 2026-08-06.**
 
@@ -454,6 +464,8 @@ npx tsc --noEmit
 npm run db:push        # apply migrations to remote
 npm run db:types       # regenerate lib/supabase/database.types.ts
 npm run verify:rls     # anonymous-access leak check
+npm run verify:products  # 31 product assertions, no provider needed
+npm run probe:scene-ref  # costs ONE image if the Gemini account has credit
 ```
 
 ---
@@ -615,6 +627,29 @@ different files:
    html-to-image's `<foreignObject>`, which is the one place this project cannot afford
    extra moving parts.
 
+**A product scene must be asked for as an EMPTY SET, or the piece ships with two
+products.** Handed "a marble counter, morning light", the model's instinct is to put
+something photogenic on it — and then the template composites the client's real product on
+top. The result looks perfectly good until you notice the client's bottle is standing next
+to a stranger's. Two places enforce it: `PRODUCT_SCENE_DIRECTIVE` in `prompts/image-prompt.ts`
+(appended whenever `hasProduct`, which is **derived from the template** so a caller cannot
+forget it), and the `PRODUCTO` block in the batch system prompt, which stops the *copy*
+model writing "a bottle on a wooden table" into the scene brief in the first place. The
+probe asserts both. Neither has met the provider.
+
+**`canvas.toBlob` falls back to PNG silently when it cannot encode the type you asked
+for** — the callback still fires, with a valid blob of a different format. Naming the file
+from the type you *requested* would then put `.webp` on PNG bytes, and `withDeclaredType()`
+in `lib/storage.ts` derives the Content-Type from the extension, so Storage would record
+them as `image/webp`. `encode()` in `lib/products/prepare-image.ts` reads `blob.type` back
+and derives the extension from what actually came out.
+
+**`usesProduct: true` is load-bearing in the same way `usesBackground: false` is.** It
+gates the product picker, the export (a product template with no product rasterizes into a
+PNG with a dashed empty box — valid file, obvious hole), and whether the scene prompt asks
+for an empty staging area. A new product template that omits it renders nothing and blocks
+nothing.
+
 **`usesBackground: false` on a template is load-bearing**, not decorative. Without it the
 queue spends a paid image and 10-20s on a slide that renders none, the export gate blocks
 forever waiting for a background that will never arrive, and the progress bar never
@@ -625,55 +660,65 @@ type-only template must set it.
 account ran out of credit first. The before/after comparison is still owed, and the two
 new templates have not been looked at by anyone.
 
-### NEXT UP: product photos (designed, not built)
+### Product photos (Phase 8) — built, except the scene reference
 
-Agreed with the account owner and ready to start. A client uploads a photo of their
-product and it appears in the generated piece.
+A client uploads a photo of their product and it appears in the generated piece.
 
-**The design decision, already made — do not re-litigate it.** There are two ways to do
-this and only one is right:
+**The design rule, settled — do not re-litigate it.** The image model never draws the
+product. It draws the **scene**; the client's real pixels are composited by the template.
+A model asked to reproduce a bottle from a reference *redraws* it: invented letterforms on
+the label, the silhouette slightly off, the logo garbled. That is the same rule the whole
+product runs on — AI never renders typography, code does — applied to a second kind of
+asset. A product is a brand asset like the logo.
 
-- Let the image model draw the product from a reference. It **redraws** it: invented
-  letterforms on the label, the shape slightly off, the logo garbled. Fine for a mood,
-  unacceptable for a client's actual bottle.
-- Composite the real pixels with code. Exact, never distorted.
+**What is built**
 
-The second, because it is **the same rule the whole product is built on**: AI never
-renders typography, code does. A product is a brand asset like the logo — it gets
-composited, not generated.
+- **`brand_products`** per brand (migration 0013): name, description, image path, and
+  `has_transparency`. Plus `slides.product_id`, `on delete set null` — deleting a product
+  must never delete the pieces that used it.
+- **Upload** through the existing signed-URL path, with a new `product` kind. A fresh UUID
+  per upload, never an overwrite, so replacing a photo cannot invalidate an
+  already-exported piece.
+- **`lib/products/prepare-image.ts`**, in the browser: resize to 1600px (a phone photo is
+  4-8 MB against a 2 MiB bucket cap, and the bytes never pass through a function where
+  they could be resized), **measure** alpha rather than guessing it from the extension,
+  and optionally flood-fill a flat studio backdrop away.
+- **Two templates.** `product-hero` stands the product in a generated scene;
+  `product-showcase` puts it on flat brand colour with **no generated image at all** —
+  free, instant, and structurally incapable of looking AI-made.
+- **The batch generator** takes a product: the copy is about it, standalone pieces use the
+  product templates, and `product_id` is written only on slides whose template composites
+  one.
+- **31 assertions**, `npm run verify:products`.
 
-**The refinement on top:** send the product photo to the model as a *scene reference* so
-the light, perspective and surface match, while the actual product pixels are still laid
-over it by the template. Best of both, and it keeps the rule.
+**Everything about the cut-out is a refusal-first design.** `removeFlatBackground` flood
+fills inward from the four corners, and it **refuses** when the corners disagree with each
+other, when it would remove less than 3% (found nothing) or more than 97% (ate the
+product). On refusal the original is kept and the user is told. A silently mangled product
+photo is far worse than one that was never cut out, and it is the failure here that would
+reach a client looking finished.
 
-**Split by dependency — most of this needs no image API:**
+**There is deliberately NO dependency for background removal.** A real matting model
+(U²-Net / RMBG and friends) would cut a product out of any background, and every
+browser-side package shipping one today carries either an **AGPL licence or model weights
+licensed for non-commercial use only**. For an agency tool doing client work that is an
+account-owner decision, not one to make inside a helper. Until it is made, the flood fill
+handles the plain-backdrop case that covers most e-commerce photography, and both
+templates present an un-cut photo as a deliberately framed image rather than pasting a
+white rectangle onto a photograph.
 
-| Piece | Needs the provider? |
-|---|---|
-| `products` table per brand, upload, storage | no |
-| Background removal (browser WASM, keeps bytes off the function) | no |
-| A template with a product zone | no |
-| Batch generator knowing a product is in play, so the copy is about it | no |
-| Scene prompt describing a surface and a defined empty area to hold it | no |
-| The product photo as a scene reference | **yes** |
+**Still owed, both blocked on Gemini credit — re-confirmed 2026-08-07, the account is
+still empty** ("Your prepayment credits are depleted"):
 
-**Watch-outs found while designing it:**
-
-- `brand-assets` has a **2 MiB** limit (migration 0007). A phone photo exceeds it — either
-  raise the bucket limit or compress in the browser before upload.
-- `app/api/uploads/sign` only knows `kind: "logo" | "font"`. Needs a `product` kind, and
-  the extension allowlist already covers png/jpeg/webp.
-- The product zone template is also the third structurally-different layout, so it
-  contributes to the design-quality work in the section above rather than being separate.
-
-**Two probes are still owed, both blocked on Gemini credit:**
-
-1. Does the interactions API accept an input image? The first shape tried —
-   `{type:"image", mime_type, data}`, mirroring how the API *returns* images — got past
-   schema validation and was rejected on **billing**, not on shape. Promising but not
-   proof. Probe written and ready.
-2. A before/after of the new image prompt (`IMAGE_PROMPT_VERSION 2026-08-07.1`), which has
-   never run against the provider.
+1. **The scene reference**, the one designed piece that is not built. Sending the product
+   photo as an input image so the scene's light and perspective match it. Not written
+   blind on purpose: the request shape is unverified, and code that cannot be run is worse
+   than a probe that is ready. `npm run probe:scene-ref` answers it in one call and
+   distinguishes three outcomes — accepted / rejected on shape / still billing-blocked —
+   because the first attempt died on billing before anything looked at the field.
+2. **A before/after of the image prompt** (now `IMAGE_PROMPT_VERSION 2026-08-07.2`), which
+   has still never run against the provider. The product half of it is the riskiest
+   wording in the file: see the trap below.
 
 ### Where published content comes from
 
@@ -734,6 +779,16 @@ Still open:
      loop over offscreen-mounted slides and the jszip assembly have never run for real.
 3. **Carousel background cohesion** (see §10) — needs a prompt-level solution, since
    Gemini ignores seeds.
+4. **Put credit on the Gemini account.** Three separate things are waiting on it and none
+   can move without it: the scene reference (`npm run probe:scene-ref`), the before/after
+   of `IMAGE_PROMPT_VERSION 2026-08-07.2`, and any real look at whether the product scenes
+   come back with an empty staging area. The product feature is otherwise complete and
+   `product-showcase` works today without a single image call — that is the template to
+   demo with while the account is empty.
+5. **Look at a product piece once.** Same limitation as everything else visual here: no
+   authenticated screenshot exists. The two product templates, the checkerboard preview
+   and the cut-out have been verified by typecheck, lint, a production build and 31
+   assertions, **not by eye**.
 
 **Vercel limits that shaped the design — keep them in mind**
 - **Request *and* response body cap 4.5 MB.** Hence: uploads go browser → signed URL →
