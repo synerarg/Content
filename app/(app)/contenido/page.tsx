@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/app-shell/page-header";
 import { EmptyState } from "@/components/app-shell/empty-state";
 import { CreateBatchPanel } from "@/components/batch/create-batch-panel";
 import { checkBrandReadiness } from "@/lib/brand-readiness";
+import { formatDay } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 
 const TYPE_LABEL: Record<string, string> = {
@@ -33,7 +34,7 @@ export default async function ContenidoPage() {
     supabase
       .from("content_batches")
       .select(
-        "id, title, brief, status, created_at, brands(name), posts(id, type, slides(background_status))",
+        "id, title, brief, status, created_at, brands(name), posts(id, type, scheduled_on, slides(background_status))",
       )
       // Soft-deleted batches are hidden here but still recoverable by the
       // Deshacer in the toast. Every read of this table filters on it.
@@ -117,6 +118,16 @@ export default async function ContenidoPage() {
                   (slide) => slide.background_status === "failed",
                 ).length;
 
+                // Where the batch sits in the plan. Without it, "generated" and
+                // "planned" look identical from this list, and a batch that was
+                // never put on the calendar is invisible until someone notices
+                // nothing went out.
+                const pieces = batch.posts ?? [];
+                const scheduled = pieces.filter((post) => post.scheduled_on);
+                const nextDay = scheduled
+                  .map((post) => post.scheduled_on as string)
+                  .sort()[0];
+
                 return (
                   <Link
                     key={batch.id}
@@ -151,6 +162,22 @@ export default async function ContenidoPage() {
                         >
                           {readySlides}/{slides.length} fondos
                           {failedSlides > 0 ? ` · ${failedSlides} error` : ""}
+                        </span>
+                      ) : null}
+
+                      {pieces.length > 0 ? (
+                        <span
+                          className={`rounded-full border px-2.5 py-1 text-xs tabular-nums ${
+                            scheduled.length === pieces.length
+                              ? "border-[color-mix(in_oklch,var(--synera-accent)_28%,transparent)] text-[var(--synera-accent)]"
+                              : "border-border text-muted-foreground"
+                          }`}
+                        >
+                          {scheduled.length === 0
+                            ? "sin programar"
+                            : scheduled.length === pieces.length
+                              ? `desde ${formatDay(nextDay)}`
+                              : `${scheduled.length}/${pieces.length} con fecha`}
                         </span>
                       ) : null}
                     </div>

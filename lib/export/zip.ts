@@ -59,6 +59,7 @@ export function buildCaptionMarkdown({
   hashtags,
   cta,
   slideCount,
+  scheduleLabel,
 }: {
   batchTitle: string;
   brandName: string;
@@ -68,6 +69,13 @@ export function buildCaptionMarkdown({
   hashtags: string[];
   cta: string;
   slideCount: number;
+  /**
+   * Pre-formatted, so this file stays a formatter of what it is handed rather
+   * than growing an opinion about dates. Null renders an explicit "sin fecha":
+   * the caption file is what reaches whoever publishes, and a missing line
+   * reads as "any time" rather than as "nobody decided yet".
+   */
+  scheduleLabel?: string | null;
 }): string {
   const tags = hashtags.map((tag) => `#${tag}`).join(" ");
 
@@ -77,6 +85,7 @@ export function buildCaptionMarkdown({
     `- Lote: ${batchTitle}`,
     `- Tipo: ${postType}`,
     `- Placas: ${slideCount}`,
+    `- Publicar: ${scheduleLabel ?? "sin fecha asignada"}`,
     "",
     "## Caption",
     "",

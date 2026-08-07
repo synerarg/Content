@@ -107,6 +107,8 @@ public by design and safe; everything else is not.
                                      content_batches.deleted_at  (Phase 7)
 20260805001300_products.sql          brand_products + slides.product_id
                                      (on delete set null)  (Phase 8)
+20260805001400_scheduling.sql        posts.scheduled_on (date) +
+                                     posts.scheduled_time (time)  (Phase 9)
 ```
 
 ### RLS design (applies to every table)
@@ -143,10 +145,14 @@ lib/ai/analyze-history.ts Extracts already-used angles from published posts  (Ph
 app/api/analyze/history   Runs that extraction, stores it on the brand  (Phase 7)
 app/(app)/marcas/[id]/historial     Import published posts, run the analysis  (Phase 7)
 app/(app)/marcas/[id]/productos     Upload products, optional cut-out  (Phase 8)
+app/(app)/calendario                Month grid + unscheduled inbox  (Phase 9)
+lib/schedule.ts           Calendar arithmetic, UTC-only, no local clock  (Phase 9)
+components/batch/schedule-panel.tsx Spread a batch across days, with a preview  (Phase 9)
 lib/products/prepare-image.ts       Browser resize + alpha detect + flat-bg cut-out  (Phase 8)
 lib/render/use-product-assets.ts    Product images -> blob URLs for the export  (Phase 8)
 scripts/verify-rls.mjs    `npm run verify:rls`
 scripts/verify-products.ts          `npm run verify:products` — 31 assertions
+scripts/verify-schedule.ts          `npm run verify:schedule` — 59, twice (see §7)
 scripts/probe-gemini-reference.ts   `npm run probe:scene-ref` — needs Gemini credit
 scripts/_stub-server-only.cjs       Lets probes import `server-only` modules
 ```
@@ -239,6 +245,8 @@ template automatically teaches the prompts its slot names and character limits.
 | Brand readiness, 11 asserts | PASS — each gap detected individually, a freshly created brand correctly blocks on art direction, null input does not throw |
 | Error taxonomy, 17 asserts | PASS — explicit codes beat heuristics; real Gemini/fal/Anthropic messages classify correctly; aborts never report as failures; no English in any user-facing string |
 | Products, 31 asserts (`npm run verify:products`) | PASS — registry flags, both prompts, the form schema, and the cut-out guard rails against synthetic images (product eaten / nothing found / busy corners / product fills the frame) |
+| Scheduling, 59 asserts × 2 zones (`npm run verify:schedule`) | PASS — under the machine's zone AND pinned to UTC. **Verified to be a real test:** reintroducing the `formatDay` bug passes locally and fails the UTC pass with `04-ago` / `31-dic` |
+| Calendar PostgREST queries | PASS — both embeds answer `200 []` anonymously, so the shape is valid and RLS filters it |
 | `brand_products` denies anonymous reads | PASS — 12/12 tenant relations now |
 | Product scene reference accepted by Gemini | **UNANSWERED** — `npm run probe:scene-ref` still dies on billing, 2026-08-07 |
 
@@ -465,6 +473,7 @@ npm run db:push        # apply migrations to remote
 npm run db:types       # regenerate lib/supabase/database.types.ts
 npm run verify:rls     # anonymous-access leak check
 npm run verify:products  # 31 product assertions, no provider needed
+npm run verify:schedule  # 59 calendar assertions, run twice (local zone + UTC)
 npm run probe:scene-ref  # costs ONE image if the Gemini account has credit
 ```
 
@@ -627,6 +636,28 @@ different files:
    html-to-image's `<foreignObject>`, which is the one place this project cannot afford
    extra moving parts.
 
+**A calendar date is a WALL CLOCK, not an instant, and `formatDay` got this
+wrong in production.** It formatted `new Date(year, month-1, date)` — midnight in
+whatever zone the runtime is in — through a formatter pinned to Buenos Aires. On
+Vercel, which runs in UTC, midnight UTC is 21:00 the previous day, so every day
+label on `/configuracion` was one day early on the server and a *different* day
+after hydration in the browser: a wrong number and a hydration mismatch at once.
+Fixed by building at `Date.UTC` and formatting in UTC. **The rule for anything
+new: a `date` column is a calendar date, so both ends of the round trip are UTC
+and no `TIME_ZONE` goes anywhere near it.** `posts.scheduled_on` / `scheduled_time`
+follow it by construction — that is why they are not a `timestamptz`.
+
+**`npm run verify:schedule` runs the suite TWICE and both passes matter.** The
+second is spawned with `TZ=UTC`, and it is the one that catches local-time
+*construction* — `new Date(y, m, d)` calls no prototype getter, so the poisoned-
+getter section cannot see it. The poisoning catches local-time *reads*
+(`getDate`, `getDay`, `getTimezoneOffset`). Confirmed to be a real test rather
+than a decorative one: reintroducing the `formatDay` bug passes on a Buenos Aires
+machine and fails the UTC pass with `04-ago` and `31-dic`. Note also that
+**Node on Windows honours only `TZ=UTC` and silently ignores named IANA zones** —
+`TZ=Asia/Tokyo` still resolves to the machine's own zone, so "I tested five
+timezones" from a shell loop here is false.
+
 **A product scene must be asked for as an EMPTY SET, or the piece ships with two
 products.** Handed "a marble counter, morning light", the model's instinct is to put
 something photogenic on it — and then the template composites the client's real product on
@@ -720,7 +751,49 @@ still empty** ("Your prepayment credits are depleted"):
    has still never run against the provider. The product half of it is the riskiest
    wording in the file: see the trap below.
 
-### Where published content comes from
+---
+
+## 11. Phase 9 — the publishing calendar
+
+Built while the Gemini account had no credit, deliberately: none of it touches
+the image provider, so it moves without waiting on billing.
+
+Until now nothing carried a date. A batch was "a week of content" and the week
+existed only in whoever generated it — which piece went out when lived in a head
+or a spreadsheet.
+
+- **`posts.scheduled_on` (date) + `scheduled_time` (time)**, never a
+  `timestamptz`. See the trap in §7: a plan is a wall clock in the agency's
+  timezone, and storing an instant is what makes a piece scheduled for Monday
+  render as Sunday for whoever converts it in a different zone.
+- **`/calendario`** — a fixed six-row month grid (never five, so paging does not
+  make the page jump), a chip per piece marked with the client's own accent
+  colour, a client-side brand filter, and an inbox of **unscheduled** pieces with
+  the two inputs that put each on the calendar. The grid queries the VISIBLE
+  range, not the month, or the leading and trailing cells would be wrongly empty.
+- **Spread a whole batch in one action** — start date, cadence, hour, and
+  "saltear fines de semana". The panel **previews the actual days live** before
+  writing anything, which is what makes an option that silently moves dates
+  safe to offer. Per-piece date and time override it.
+- **The ZIP sorts in publishing order.** Folders are `2026-08-05-01-feed`;
+  unscheduled pieces get `sin-fecha`, which sorts after every date and groups
+  them at the end. `caption.md` carries a `Publicar:` line, and says "sin fecha
+  asignada" rather than omitting it — a missing line reads as "any time".
+- **A duplicated batch arrives unscheduled**, deliberately: copying the dates
+  would double-book every day the original occupies.
+
+`scheduleBatch` writes one statement per piece rather than one upsert, because
+an upsert would need every not-null column in the payload — including the
+caption — so a stale tab would silently revert copy edited since it loaded.
+
+**Not verified by eye**, same structural limitation as everything else visual
+here. The month grid, the chips and the inbox are covered by 59 assertions, a
+production build and a live check that both PostgREST queries are valid; nobody
+has looked at them.
+
+---
+
+## 12. Where published content comes from
 
 Today: **pasted in by hand** at `/marcas/[id]/historial`. The table carries `source` and
 `external_id` with a partial unique index precisely so a future sync updates in place
@@ -755,7 +828,7 @@ in the prompt.
 
 ---
 
-## 11. What is left
+## 13. What is left
 
 **Done since Phase 6:** the app is **deployed on Vercel** at
 `content-nine-neon.vercel.app`, **Google OAuth is configured**, and — the big one —
@@ -789,6 +862,12 @@ Still open:
    authenticated screenshot exists. The two product templates, the checkerboard preview
    and the cut-out have been verified by typecheck, lint, a production build and 31
    assertions, **not by eye**.
+6. **Nothing publishes anything.** The calendar (§11) is a PLAN, not a scheduler: no job,
+   no queue and no integration acts on a date. A piece due Thursday changes what the
+   screens say and nothing else. The Instagram Graph API route in §12 is what would close
+   it, along with the per-tenant-secrets problem described there — this app currently
+   stores no third-party secrets at all, and `SUPABASE_SERVICE_ROLE_KEY` is deliberately
+   empty.
 
 **Vercel limits that shaped the design — keep them in mind**
 - **Request *and* response body cap 4.5 MB.** Hence: uploads go browser → signed URL →

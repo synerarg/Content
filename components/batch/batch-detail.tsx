@@ -34,10 +34,18 @@ import {
   duplicateBatch,
   duplicatePost,
   restoreBatch,
+  setPostSchedule,
   setSlideProduct,
   updatePost,
   updateSlideSlots,
 } from "@/app/(app)/contenido/actions";
+import { SchedulePanel } from "@/components/batch/schedule-panel";
+import {
+  DEFAULT_TIME,
+  exportPrefix,
+  formatScheduleLabel,
+  timeInputValue,
+} from "@/lib/schedule";
 import { BackgroundHistory } from "@/components/batch/background-history";
 import {
   useBackgroundQueue,
@@ -95,6 +103,9 @@ export type BatchPost = {
   caption: string;
   hashtags: string[];
   cta: string;
+  /** Calendar day in the agency timezone, or null. Never an instant — migration 0014. */
+  scheduledOn: string | null;
+  scheduledTime: string | null;
   slides: BatchSlide[];
 };
 
@@ -327,6 +338,41 @@ export function BatchDetail({
     from re-running the effect that owns every background blob URL on screen,
     which is the flicker documented in HANDOFF §7.
   */
+  /*
+    Schedule edits are written straight through, like the product picker: a date
+    comes from a picker, not from a stream of keystrokes, so there is nothing to
+    debounce. Local state is patched first so the input never fights the user.
+  */
+  function patchSchedule(
+    postId: string,
+    scheduledOn: string | null,
+    scheduledTime: string | null,
+  ) {
+    setPosts((current) =>
+      current.map((post) =>
+        post.id === postId ? { ...post, scheduledOn, scheduledTime } : post,
+      ),
+    );
+  }
+
+  async function changeSchedule(
+    postId: string,
+    scheduledOn: string | null,
+    scheduledTime: string | null,
+  ) {
+    // Mirrors the database check constraint, and the action's own guard: no day
+    // means no hour. Doing it here too keeps the inputs consistent immediately
+    // rather than after a round trip.
+    const nextTime = scheduledOn ? scheduledTime : null;
+    patchSchedule(postId, scheduledOn, nextTime);
+
+    const result = await setPostSchedule(postId, {
+      scheduled_on: scheduledOn,
+      scheduled_time: nextTime,
+    });
+    if (!result.ok) notifyError(new Error(result.error));
+  }
+
   async function changeProduct(slideId: string, productId: string) {
     setPosts((current) =>
       current.map((post) => ({
@@ -400,7 +446,15 @@ export function BatchDetail({
       setExportProgress({ done: 0, total });
 
       for (const [postIndex, post] of posts.entries()) {
-        const folder = `${batchSlug}/${String(postIndex + 1).padStart(2, "0")}-${post.type}`;
+        /*
+          Date first, so the extracted folder sorts in publishing order — which
+          is the order whoever posts it works through. Unscheduled pieces get
+          `sin-fecha`, which sorts after every date and groups them at the end
+          instead of scattering them through the plan.
+        */
+        const folder = `${batchSlug}/${exportPrefix(post.scheduledOn)}-${String(
+          postIndex + 1,
+        ).padStart(2, "0")}-${post.type}`;
 
         for (const [slideIndex, slide] of post.slides.entries()) {
           const node = slideRefs.current[slide.id];
@@ -443,6 +497,7 @@ export function BatchDetail({
             hashtags: post.hashtags,
             cta: post.cta,
             slideCount: post.slides.length,
+            scheduleLabel: formatScheduleLabel(post.scheduledOn, post.scheduledTime),
           }),
         });
       }
@@ -730,9 +785,36 @@ export function BatchDetail({
         </p>
       ) : null}
 
+      <SchedulePanel
+        batchId={batchId}
+        postCount={posts.length}
+        scheduledCount={posts.filter((post) => post.scheduledOn).length}
+        onScheduled={(assigned, time) => {
+          // Patched from the action's own return value rather than refreshed:
+          // the page is holding a blob URL per slide and has nothing to re-read.
+          const byId = new Map(assigned.map((item) => [item.postId, item.scheduledOn]));
+          setPosts((current) =>
+            current.map((post) =>
+              byId.has(post.id)
+                ? { ...post, scheduledOn: byId.get(post.id) ?? null, scheduledTime: time }
+                : post,
+            ),
+          );
+        }}
+        onCleared={() =>
+          setPosts((current) =>
+            current.map((post) => ({
+              ...post,
+              scheduledOn: null,
+              scheduledTime: null,
+            })),
+          )
+        }
+      />
+
       {posts.map((post, postIndex) => (
         <section key={post.id} className="space-y-4">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <span className="rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground">
               {String(postIndex + 1).padStart(2, "0")} ·{" "}
               {TYPE_LABEL[post.type] ?? post.type}
@@ -740,6 +822,38 @@ export function BatchDetail({
             <span className="text-xs text-muted-foreground">
               {post.slides.length} placa{post.slides.length === 1 ? "" : "s"}
             </span>
+
+            {/*
+              Per-piece override of whatever the batch-level distribution did.
+              A plan survives contact with a client precisely because one piece
+              can move without redoing the other four.
+            */}
+            <span className="flex items-center gap-1.5">
+              <input
+                type="date"
+                aria-label={`Fecha de la pieza ${postIndex + 1}`}
+                value={post.scheduledOn ?? ""}
+                onChange={(event) =>
+                  changeSchedule(
+                    post.id,
+                    event.target.value || null,
+                    post.scheduledTime ?? DEFAULT_TIME,
+                  )
+                }
+                className="h-8 rounded-md border border-border bg-transparent px-2 text-xs"
+              />
+              <input
+                type="time"
+                aria-label={`Hora de la pieza ${postIndex + 1}`}
+                value={timeInputValue(post.scheduledTime)}
+                disabled={!post.scheduledOn}
+                onChange={(event) =>
+                  changeSchedule(post.id, post.scheduledOn, event.target.value || null)
+                }
+                className="h-8 rounded-md border border-border bg-transparent px-2 text-xs tabular-nums disabled:opacity-40"
+              />
+            </span>
+
             <Button
               variant="ghost"
               size="sm"

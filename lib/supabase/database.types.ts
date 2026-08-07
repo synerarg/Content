@@ -389,6 +389,8 @@ export type Database = {
           hashtags: string[]
           id: string
           position: number
+          scheduled_on: string | null
+          scheduled_time: string | null
           type: Database["public"]["Enums"]["post_type"]
           updated_at: string
           workspace_id: string
@@ -401,6 +403,8 @@ export type Database = {
           hashtags?: string[]
           id?: string
           position?: number
+          scheduled_on?: string | null
+          scheduled_time?: string | null
           type: Database["public"]["Enums"]["post_type"]
           updated_at?: string
           workspace_id: string
@@ -413,6 +417,8 @@ export type Database = {
           hashtags?: string[]
           id?: string
           position?: number
+          scheduled_on?: string | null
+          scheduled_time?: string | null
           type?: Database["public"]["Enums"]["post_type"]
           updated_at?: string
           workspace_id?: string

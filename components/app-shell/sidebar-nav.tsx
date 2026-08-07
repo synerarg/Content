@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  CalendarDays,
   CircleQuestionMark,
   LayoutGrid,
   LayoutTemplate,
@@ -14,6 +15,7 @@ import { cn } from "@/lib/utils";
 const NAV_ITEMS = [
   { href: "/marcas", label: "Marcas", icon: Palette },
   { href: "/contenido", label: "Contenido", icon: LayoutGrid },
+  { href: "/calendario", label: "Calendario", icon: CalendarDays },
   { href: "/plantillas", label: "Plantillas", icon: LayoutTemplate },
   { href: "/configuracion", label: "Configuración", icon: Settings },
   { href: "/ayuda", label: "Ayuda", icon: CircleQuestionMark },
@@ -40,7 +42,7 @@ export function SidebarNav({
       className={cn(
         "flex",
         isHorizontal
-          ? // No wrapping: four items scroll rather than reflow into two rows,
+          ? // No wrapping: the items scroll rather than reflow into two rows,
             // which keeps the strip a fixed height as the label lengths change.
             "gap-1 overflow-x-auto px-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           : "flex-col gap-1 px-3",

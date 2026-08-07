@@ -21,8 +21,23 @@ const dateTimeFormatter = new Intl.DateTimeFormat(LOCALE, {
   hour12: false,
 });
 
+/*
+  Pinned to UTC, unlike every other formatter in this file, and that is the
+  point: this one renders a CALENDAR DATE, not an instant.
+
+  It used to carry `timeZone: TIME_ZONE` and was off by one on the server. The
+  input is a plain `YYYY-MM-DD`; building a Date from it produces midnight in
+  whatever zone the runtime is in, and Vercel runs in UTC — so midnight UTC
+  formatted in Buenos Aires (UTC-3) is 21:00 the PREVIOUS day. Every day label
+  on /configuracion rendered one day early on the server and then a different
+  day after hydration in the browser, which is a wrong number and a hydration
+  mismatch at the same time.
+
+  Building at UTC midnight and formatting in UTC makes both sides agree and
+  keeps the value what it actually is: a date with no time and no zone.
+*/
 const dayFormatter = new Intl.DateTimeFormat(LOCALE, {
-  timeZone: TIME_ZONE,
+  timeZone: "UTC",
   day: "2-digit",
   month: "short",
 });
@@ -39,16 +54,16 @@ export function formatDateTime(iso: string | null | undefined): string {
 /**
  * Format a `date` column coming back from Postgres as `YYYY-MM-DD`.
  *
- * Parsed as a plain calendar date, not an instant: `new Date("2026-08-05")` is
- * midnight UTC, which formats as the 4th in Buenos Aires. The view already did
- * the timezone work when it bucketed the day, so re-interpreting the result as
- * an instant would shift every label back by one.
+ * Parsed as a plain calendar date, never as an instant. The value already had
+ * the timezone work done to it — by the view that bucketed the day, or by the
+ * agency that chose it — so any re-interpretation here can only move it. See
+ * the note on `dayFormatter` for the off-by-one this used to have.
  */
 export function formatDay(day: string | null | undefined): string {
   if (!day) return "—";
   const [year, month, date] = day.split("-").map(Number);
   if (!year || !month || !date) return day;
-  return dayFormatter.format(new Date(year, month - 1, date));
+  return dayFormatter.format(new Date(Date.UTC(year, month - 1, date)));
 }
 
 const relativeFormatter = new Intl.RelativeTimeFormat(LOCALE, { numeric: "auto" });

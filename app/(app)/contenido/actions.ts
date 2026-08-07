@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireWorkspaceId } from "@/lib/workspace";
+import { distributeSchedule } from "@/lib/schedule";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -490,6 +491,11 @@ export async function listSlideBackgrounds(
   scene brief — because a duplicate that drops the background is not a starting
   point, it is a chore. The copy points at the same Storage object rather than
   re-generating: the image already exists and is already paid for.
+
+  What a duplicate deliberately does NOT inherit is the SCHEDULE. Copying the
+  dates would double-book every day the original occupies, and the reason to
+  duplicate a batch is almost always to run it again later. It arrives
+  unscheduled, which is also what the calendar's "sin programar" list is for.
 */
 
 export async function duplicateBatch(
@@ -672,4 +678,148 @@ export async function duplicatePost(
       error: error instanceof Error ? error.message : "Error inesperado.",
     };
   }
+}
+
+/*
+  ---------------------------------------------------------------------------
+  Scheduling
+  ---------------------------------------------------------------------------
+
+  A day and a wall-clock time per piece, never an instant — see migration 0014
+  for why that distinction is the whole design.
+
+  None of these revalidate. They are called from the batch page, which holds
+  every background on screen as a blob URL keyed by slide id, and from the
+  calendar, which knows exactly what it changed. Each caller refreshes if it
+  needs to; see the note on setSlideProduct.
+*/
+
+const daySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida.");
+const timeSchema = z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, "Hora inválida.");
+
+const postScheduleSchema = z.object({
+  scheduled_on: daySchema.nullable(),
+  scheduled_time: timeSchema.nullable(),
+});
+
+export async function setPostSchedule(
+  postId: string,
+  input: unknown,
+): Promise<ActionResult> {
+  const parsed = postScheduleSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
+  }
+
+  // Mirrors the database's own check constraint. Clearing the day has to clear
+  // the hour with it, or the update is rejected by Postgres with a message
+  // nobody reading a calendar would understand.
+  const patch = parsed.data.scheduled_on
+    ? parsed.data
+    : { scheduled_on: null, scheduled_time: null };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("posts")
+    .update(patch)
+    .eq("id", postId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) return { ok: false, error: error.message };
+  if (!data) return { ok: false, error: "No se encontró la pieza." };
+
+  return { ok: true };
+}
+
+const batchScheduleSchema = z.object({
+  startOn: daySchema,
+  everyDays: z.number().int().min(1).max(31),
+  skipWeekends: z.boolean(),
+  time: timeSchema,
+});
+
+export type BatchScheduleResult =
+  | { ok: true; assigned: Array<{ postId: string; scheduledOn: string }> }
+  | { ok: false; error: string };
+
+/**
+ * Spread a whole batch across the calendar in one go.
+ *
+ * This is the reason the feature is worth building rather than a date field on
+ * each piece: a week of content is five pieces, and setting five dates by hand
+ * is exactly the click count Phase 7 existed to remove.
+ *
+ * Returns the assignment so the caller can patch its own state instead of
+ * refreshing — the batch page is holding blob URLs it would rather not disturb.
+ */
+export async function scheduleBatch(
+  batchId: string,
+  input: unknown,
+): Promise<BatchScheduleResult> {
+  const parsed = batchScheduleSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
+  }
+
+  const supabase = await createClient();
+
+  // Ordered by position: the publishing order is the order the generator wrote
+  // them in, which is the order the recipe asked for.
+  const { data: posts, error: postsError } = await supabase
+    .from("posts")
+    .select("id, position")
+    .eq("batch_id", batchId)
+    .order("position", { ascending: true });
+
+  if (postsError) return { ok: false, error: postsError.message };
+  if (!posts || posts.length === 0) {
+    return { ok: false, error: "Este lote no tiene piezas." };
+  }
+
+  const days = distributeSchedule(posts.length, {
+    startOn: parsed.data.startOn,
+    everyDays: parsed.data.everyDays,
+    skipWeekends: parsed.data.skipWeekends,
+  });
+
+  /*
+    One statement per piece rather than an upsert of the whole set.
+
+    An upsert would need every not-null column of `posts` in the payload — the
+    caption included — so a stale client would overwrite copy that was edited
+    since the page loaded. Five updates is not a performance problem; silently
+    reverting someone's caption is.
+  */
+  const assigned: Array<{ postId: string; scheduledOn: string }> = [];
+  for (const [index, post] of posts.entries()) {
+    const scheduledOn = days[index];
+    if (!scheduledOn) continue;
+
+    const { error } = await supabase
+      .from("posts")
+      .update({ scheduled_on: scheduledOn, scheduled_time: parsed.data.time })
+      .eq("id", post.id);
+
+    if (error) return { ok: false, error: error.message };
+    assigned.push({ postId: post.id, scheduledOn });
+  }
+
+  return { ok: true, assigned };
+}
+
+/** Take a whole batch off the calendar. The pieces and their copy are untouched. */
+export async function clearBatchSchedule(batchId: string): Promise<ActionResult> {
+  const supabase = await createClient();
+
+  const { data: posts, error } = await supabase
+    .from("posts")
+    .update({ scheduled_on: null, scheduled_time: null })
+    .eq("batch_id", batchId)
+    .select("id");
+
+  if (error) return { ok: false, error: error.message };
+  if (!posts) return { ok: false, error: "No se encontró el lote." };
+
+  return { ok: true };
 }

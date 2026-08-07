@@ -47,7 +47,7 @@ export default async function BatchPage({
        brands (id, name, palette, typography, logo_path,
                brand_fonts (family, weight, style, storage_path),
                brand_products (id, name, description, image_path, has_transparency)),
-       posts (id, position, type, caption, hashtags, cta,
+       posts (id, position, type, caption, hashtags, cta, scheduled_on, scheduled_time,
               slides (id, position, template_slug, format, slots, product_id, background_path, generation_params,
                       background_status, background_error, background_attempts))`,
     )
@@ -117,6 +117,8 @@ export default async function BatchPage({
       caption: post.caption,
       hashtags: post.hashtags ?? [],
       cta: post.cta,
+      scheduledOn: post.scheduled_on,
+      scheduledTime: post.scheduled_time,
       slides: (post.slides ?? [])
         .slice()
         .sort((a, b) => a.position - b.position)
