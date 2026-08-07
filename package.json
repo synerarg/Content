@@ -18,7 +18,8 @@
     "verify:legibility": "tsx --require ./scripts/_stub-server-only.cjs scripts/verify-legibility.ts",
     "verify:website": "tsx --require ./scripts/_stub-server-only.cjs scripts/verify-website.ts",
     "probe:website": "tsx --require ./scripts/_stub-server-only.cjs scripts/probe-website.ts",
-    "verify:search": "tsx --require ./scripts/_stub-server-only.cjs scripts/verify-search.ts"
+    "verify:search": "tsx --require ./scripts/_stub-server-only.cjs scripts/verify-search.ts",
+    "probe:image-prompt": "tsx --require ./scripts/_stub-server-only.cjs scripts/probe-image-prompt.ts"
   },
   "overrides": {
     "postcss": "^8.5.25",

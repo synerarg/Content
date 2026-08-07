@@ -35,7 +35,7 @@ Not a git repo beyond the create-next-app initial commit.
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | set | 46-char **publishable** key (`sb_publishable_…`), not the legacy JWT |
 | `SUPABASE_SERVICE_ROLE_KEY` | **empty** | Not needed so far. User must paste it themselves if ever required |
 | `ANTHROPIC_API_KEY` | set | Working, verified with live calls |
-| `GEMINI_API_KEY` | set | Working, verified with live image generation |
+| `GEMINI_API_KEY` | set | Working. **Account has credit again as of 2026-08-07**, which unblocked the two probes that had been owed since Phase 8 |
 | `GEMINI_IMAGE_MODEL` | empty | Optional override; defaults to `gemini-2.5-flash-image` |
 | `IMAGE_PROVIDER` | `google` | Set to `fal` to switch back |
 | `FAL_KEY` | set but **account has no balance** | Code works; fal returns "Exhausted balance" |
@@ -73,7 +73,7 @@ public by design and safe; everything else is not.
 | Components | shadcn/ui on **Radix** (`--base radix`) | The CLI now defaults to Base UI. `form` is **not available** in the registry — react-hook-form is wired manually |
 | Validation | **zod v4** | See traps §7 |
 | Text AI | **`claude-sonnet-5`** | **Not `claude-sonnet-4-6`** — 4.6 does *not* support `output_config.format` (structured outputs), which the whole generation design depends on |
-| Image AI | **Gemini `gemini-2.5-flash-image`** | fal/FLUX.2 is fully coded and working but the account has no balance |
+| Image AI | **Gemini `gemini-2.5-flash-image`** | Verified live end to end. fal/FLUX.2 is fully coded but that account has no balance |
 | Rasterize | `html-to-image` | Client-side only. Not Satori |
 | ZIP | `jszip` | Client-side only |
 
@@ -267,7 +267,9 @@ template automatically teaches the prompts its slot names and character limits.
 | `search_content` RPC | PASS — valid shape, handles quoted phrases and `-exclusions` without raising, answers `200 []` anonymously |
 | Search snippets, 22 asserts (`npm run verify:search`) | PASS — including the accent-offset trap |
 | `brand_products` denies anonymous reads | PASS — 12/12 tenant relations now |
-| Product scene reference accepted by Gemini | **UNANSWERED** — `npm run probe:scene-ref` still dies on billing, 2026-08-07 |
+| Gemini accepts an INPUT image | **PASS, 2026-08-07** — `npm run probe:scene-ref` returned 200 with an image. The `{type:"image", mime_type, data}` shape is correct, so the scene reference is buildable |
+| Image prompt `2026-08-07.2`, **live before/after** | **PASS, 2026-08-07** — `npm run probe:image-prompt`, three generations off one brief. See §12 for what the images actually showed |
+| Empty-staging-area directive | **PASS, live** — the identical brief put a carafe, apples, jars and a book on the table WITHOUT the directive, and returned a completely bare surface with it |
 
 **The PNG export — CLOSED, 2026-08-06.**
 
@@ -814,18 +816,42 @@ handles the plain-backdrop case that covers most e-commerce photography, and bot
 templates present an un-cut photo as a deliberately framed image rather than pasting a
 white rectangle onto a photograph.
 
-**Still owed, both blocked on Gemini credit — re-confirmed 2026-08-07, the account is
-still empty** ("Your prepayment credits are depleted"):
+**Both owed verifications are now CLOSED — 2026-08-07, once the account had credit.**
 
-1. **The scene reference**, the one designed piece that is not built. Sending the product
-   photo as an input image so the scene's light and perspective match it. Not written
-   blind on purpose: the request shape is unverified, and code that cannot be run is worse
-   than a probe that is ready. `npm run probe:scene-ref` answers it in one call and
-   distinguishes three outcomes — accepted / rejected on shape / still billing-blocked —
-   because the first attempt died on billing before anything looked at the field.
-2. **A before/after of the image prompt** (now `IMAGE_PROMPT_VERSION 2026-08-07.2`), which
-   has still never run against the provider. The product half of it is the riskiest
-   wording in the file: see the trap below.
+**1. The image prompt, live before/after** (`npm run probe:image-prompt`). One brief,
+three prompts, images written out and read:
+
+- **Before** (brief + the no-text rule only): a symmetrical, centred composition with the
+  table covered in props — a carafe, a bowl of apples, jars, a book, a mug. The archetypal
+  stock photo, and its lower third full of table legs and floor. Type overlaid there would
+  have been unreadable.
+- **After**, `bold-headline`: subject in the upper two thirds, and the lower third an
+  out-of-focus, uncluttered surface — exactly what its `COMPOSITION_BY_TEMPLATE` entry
+  asks for. Asymmetric, shallow depth of field, no symmetry. The guidance works, visibly.
+- **After**, `product-hero` with `hasProduct: true`: the surface came back **completely
+  bare**, props peripheral and out of focus. Against the identical brief that produced a
+  loaded table without the directive, this is the empty-staging-area rule doing precisely
+  its job.
+
+None of the three contained any text, signage or logos.
+
+**One thing worth knowing, and it is a legibility question rather than a prompt one:** the
+"after" frames put a bright, pale surface where the type goes. The composition is right —
+uncluttered — but a light background under white type is a contrast problem, which is
+exactly the case `npm run verify:legibility` and the "Revisar legibilidad" button exist
+to catch. The two features meet here: the prompt clears the space, the check confirms the
+type survives it.
+
+**2. Gemini accepts an INPUT image** (`npm run probe:scene-ref`). HTTP 200 with an image
+back, so `{type:"image", mime_type, data}` is the right shape and the **scene reference is
+buildable**. The returned scene was empty, which answers the follow-up question the probe
+warns about: the model treated the reference as a style cue rather than as something to
+draw.
+
+**The scene reference itself is still NOT built**, and that is now a choice rather than a
+blocker: the API shape is confirmed, so it is ordinary work — send the product's bytes
+alongside the scene prompt, and decide what happens when a brand has several products on
+one carousel.
 
 ---
 
@@ -986,19 +1012,19 @@ Still open:
      loop over offscreen-mounted slides and the jszip assembly have never run for real.
 3. **Carousel background cohesion** (see §10) — needs a prompt-level solution, since
    Gemini ignores seeds.
-4. **Put credit on the Gemini account.** Three separate things are waiting on it and none
-   can move without it: the scene reference (`npm run probe:scene-ref`), the before/after
-   of `IMAGE_PROMPT_VERSION 2026-08-07.2`, and any real look at whether the product scenes
-   come back with an empty staging area. The product feature is otherwise complete and
-   `product-showcase` works today without a single image call — that is the template to
-   demo with while the account is empty.
+4. **Build the scene reference.** No longer blocked: `npm run probe:scene-ref` confirmed
+   on 2026-08-07 that the interactions API accepts an input image. What is left is
+   ordinary work — send the product's bytes alongside the scene prompt so the generated
+   light and perspective match the photo that gets composited, and decide what a carousel
+   does when its slides carry different products. `lib/image/provider.ts` would grow a
+   `referenceImage` on `GenerateImageParams`; fal takes one too, under a different name.
 5. **Look at a product piece once.** Same limitation as everything else visual here: no
    authenticated screenshot exists. The two product templates, the checkerboard preview
    and the cut-out have been verified by typecheck, lint, a production build and 31
    assertions, **not by eye**.
 6. **Nothing publishes anything.** The calendar (§11) is a PLAN, not a scheduler: no job,
    no queue and no integration acts on a date. A piece due Thursday changes what the
-   screens say and nothing else. The Instagram Graph API route in §12 is what would close
+   screens say and nothing else. The Instagram Graph API route in §13 is what would close
    it, along with the per-tenant-secrets problem described there — this app currently
    stores no third-party secrets at all, and `SUPABASE_SERVICE_ROLE_KEY` is deliberately
    empty.

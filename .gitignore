@@ -50,3 +50,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Probe output: real generated images, written by scripts/probe-image-prompt.ts
+# and scripts/probe-gemini-reference.ts. Evidence, not source — regenerate them
+# rather than carrying megabytes of JPEG in the history.
+/probe-*.jpg
+/scene-reference-probe.jpg
