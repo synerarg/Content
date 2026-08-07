@@ -5,6 +5,11 @@ import { requireWorkspaceId } from "@/lib/workspace";
 import { generateBatch, BATCH_MODEL } from "@/lib/ai/generate-batch";
 import { logGeneration } from "@/lib/ai/log-generation";
 import { codeOf } from "@/lib/errors";
+import {
+  describeMatch,
+  findSimilar,
+  indexPosts,
+} from "@/lib/content/duplicates";
 import { templateUsesProduct } from "@/templates/registry";
 import { historyAnalysisSchema } from "@/lib/ai/analyze-history";
 import {
@@ -201,6 +206,54 @@ export async function POST(request: Request) {
     if (slideRows.length > 0) {
       const { error: slidesError } = await supabase.from("slides").insert(slideRows);
       if (slidesError) throw new Error(slidesError.message);
+    }
+
+    /*
+      Semantic near-duplicate check.
+
+      This is the check HANDOFF §10 says is missing: the keyword metric built
+      for the published-history work scored 0/7 on a run that had visibly
+      repeated itself, because it needed literal matches of phrases that never
+      reappear verbatim. Embeddings see "un catálogo de fotos no cobra" next to
+      "no es un catálogo de fotos"; keywords never did.
+
+      Embeddings are stored FIRST and every piece is then compared against
+      everything including its own siblings, so a batch that repeats ITSELF is
+      caught too — which the recipe's "distinct angle" instruction asks for but
+      cannot enforce.
+
+      Entirely best-effort: the batch has already been written and paid for, so
+      a failure here becomes a warning and nothing else.
+    */
+    const savedPosts = (insertedPosts ?? [])
+      .slice()
+      .sort((a, b) => a.position - b.position)
+      .map((row, index) => ({
+        id: row.id,
+        caption: result.posts[index]?.caption ?? "",
+      }))
+      .filter((post) => post.caption.trim().length > 0);
+
+    const indexed = await indexPosts(supabase, savedPosts);
+
+    if (indexed.error) {
+      result.warnings.push(
+        `No se pudo revisar si el lote repite contenido: ${indexed.error}`,
+      );
+    } else {
+      for (const [index, post] of savedPosts.entries()) {
+        const embedding = indexed.embeddings.get(post.id);
+        if (!embedding) continue;
+
+        const matches = await findSimilar(supabase, brand.id, embedding, {
+          excludePostId: post.id,
+        });
+        // Only the nearest one per piece. Three warnings about the same piece
+        // is how a useful signal becomes noise people dismiss.
+        if (matches[0]) {
+          result.warnings.push(describeMatch(index, matches[0]));
+        }
+      }
     }
 
     await logGeneration({

@@ -146,6 +146,7 @@ export type Database = {
           brand_id: string
           caption: string
           created_at: string
+          embedding: string | null
           external_id: string | null
           id: string
           permalink: string | null
@@ -157,6 +158,7 @@ export type Database = {
           brand_id: string
           caption: string
           created_at?: string
+          embedding?: string | null
           external_id?: string | null
           id?: string
           permalink?: string | null
@@ -168,6 +170,7 @@ export type Database = {
           brand_id?: string
           caption?: string
           created_at?: string
+          embedding?: string | null
           external_id?: string | null
           id?: string
           permalink?: string | null
@@ -386,6 +389,7 @@ export type Database = {
           caption: string
           created_at: string
           cta: string
+          embedding: string | null
           hashtags: string[]
           id: string
           position: number
@@ -400,6 +404,7 @@ export type Database = {
           caption?: string
           created_at?: string
           cta?: string
+          embedding?: string | null
           hashtags?: string[]
           id?: string
           position?: number
@@ -414,6 +419,7 @@ export type Database = {
           caption?: string
           created_at?: string
           cta?: string
+          embedding?: string | null
           hashtags?: string[]
           id?: string
           position?: number
@@ -661,6 +667,23 @@ export type Database = {
     Functions: {
       current_workspace_ids: { Args: never; Returns: string[] }
       current_workspace_ids_text: { Args: never; Returns: string[] }
+      find_similar_content: {
+        Args: {
+          brand: string
+          exclude_post?: string
+          match_threshold?: number
+          max_results?: number
+          query_embedding: string
+        }
+        Returns: {
+          batch_id: string
+          excerpt: string
+          label: string
+          ref_id: string
+          similarity: number
+          source: string
+        }[]
+      }
       jsonb_values_text: { Args: { doc: Json }; Returns: string }
       search_content: {
         Args: { brand_filter?: string; max_results?: number; query: string }

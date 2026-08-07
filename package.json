@@ -20,7 +20,8 @@
     "probe:website": "tsx --require ./scripts/_stub-server-only.cjs scripts/probe-website.ts",
     "verify:search": "tsx --require ./scripts/_stub-server-only.cjs scripts/verify-search.ts",
     "probe:image-prompt": "tsx --require ./scripts/_stub-server-only.cjs scripts/probe-image-prompt.ts",
-    "probe:scene-ab": "tsx --require ./scripts/_stub-server-only.cjs scripts/probe-scene-reference.ts"
+    "probe:scene-ab": "tsx --require ./scripts/_stub-server-only.cjs scripts/probe-scene-reference.ts",
+    "probe:embeddings": "tsx --require ./scripts/_stub-server-only.cjs scripts/probe-embeddings.ts"
   },
   "overrides": {
     "postcss": "^8.5.25",

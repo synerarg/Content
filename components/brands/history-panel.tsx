@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Sparkles, Trash2, Upload } from "lucide-react";
+import { Fingerprint, Loader2, Sparkles, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
   deletePublishedPost,
@@ -45,6 +45,7 @@ export function HistoryPanel({
   const [raw, setRaw] = useState("");
   const [importing, setImporting] = useState(false);
   const [analysing, setAnalysing] = useState(false);
+  const [indexing, setIndexing] = useState(false);
 
   const detected = splitPastedCaptions(raw).length;
 
@@ -103,6 +104,38 @@ export function HistoryPanel({
       notifyError(cause, { retry: handleAnalyse });
     } finally {
       setAnalysing(false);
+    }
+  }
+
+  async function handleIndex() {
+    setIndexing(true);
+    try {
+      const res = await fetch("/api/analyze/embeddings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brandId }),
+      });
+
+      if (!res.ok) {
+        notifyError(null, { payload: await readErrorPayload(res), retry: handleIndex });
+        return;
+      }
+
+      const payload = await res.json();
+      const total = (payload.published ?? 0) + (payload.generated ?? 0);
+
+      // "Nothing to do" is a success worth saying out loud: pressing the button
+      // twice should read as done, not as broken.
+      toast.success(
+        total === 0
+          ? "Ya estaba todo indexado."
+          : `${total} textos indexados (${payload.published} publicados, ${payload.generated} generados).`,
+      );
+      for (const message of payload.errors ?? []) toast.warning(message);
+    } catch (cause) {
+      notifyError(cause, { retry: handleIndex });
+    } finally {
+      setIndexing(false);
     }
   }
 
@@ -171,6 +204,29 @@ export function HistoryPanel({
             </p>
           </div>
 
+          {/*
+            Grouped, or `justify-between` on the parent would push them to
+            opposite ends of the row.
+
+            Indexing is separate from the angle analysis, and both are worth
+            having: the analysis names angles so the generator can be told to
+            avoid them BEFORE writing, and the index catches a repeat the model
+            produced anyway. One is a prohibition, the other is a check.
+          */}
+          <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="secondary"
+            onClick={handleIndex}
+            disabled={indexing || posts.length === 0}
+          >
+            {indexing ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Fingerprint className="size-4" />
+            )}
+            {indexing ? "Indexando…" : "Indexar para duplicados"}
+          </Button>
+
           <Button
             onClick={handleAnalyse}
             disabled={analysing || posts.length === 0}
@@ -186,6 +242,7 @@ export function HistoryPanel({
                 ? "Volver a analizar"
                 : "Analizar historial"}
           </Button>
+          </div>
         </div>
 
         {stale ? (
