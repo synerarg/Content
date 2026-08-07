@@ -9,6 +9,10 @@ import { EditorialSplit, editorialSplitSlots } from "./editorial-split";
 import { Statement, statementSlots } from "./statement";
 import { ProductHero, productHeroSlots } from "./product-hero";
 import { ProductShowcase, productShowcaseSlots } from "./product-showcase";
+import { ComparisonRows, comparisonRowsSlots } from "./comparison-rows";
+import { BigNumber, bigNumberSlots } from "./big-number";
+import { BeforeAfter, beforeAfterSlots } from "./before-after";
+import { FeatureStack, featureStackSlots } from "./feature-stack";
 import type { FormatKey, TemplateProps, TemplateRole } from "./types";
 
 /**
@@ -251,6 +255,117 @@ export const TEMPLATES: AnyTemplateDefinition[] = [
     component: ProductShowcase,
   },
   {
+    slug: "comparison-rows",
+    name: "Comparativa",
+    description:
+      "Filas apiladas donde la fila de la marca gana. Para precio, comisiones y prestaciones.",
+    role: "single",
+    formats: ["feed", "story"],
+    slots: comparisonRowsSlots,
+    // Sólo tipografía: la cola se la saltea y el export no espera imagen.
+    usesBackground: false,
+    slotLabels: {
+      headline: "Titular",
+      row_1_label: "Alternativa 1",
+      row_1_value: "Valor 1",
+      row_2_label: "Alternativa 2",
+      row_2_value: "Valor 2",
+      row_3_label: "Alternativa 3",
+      row_3_value: "Valor 3",
+      mine_label: "La marca",
+      mine_value: "Valor de la marca",
+      footnote: "Condición",
+    },
+    slotHints: {
+      headline: "Qué se está comparando. Una línea.",
+      row_1_label: "La alternativa, con su nombre real. Opcional.",
+      row_1_value: "El número o la palabra que la define. Corto: entra en una línea.",
+      row_2_label: "Segunda alternativa. Opcional.",
+      row_2_value: "Su valor.",
+      row_3_label: "Tercera alternativa. Opcional.",
+      row_3_value: "Su valor.",
+      mine_label: "El nombre de la marca. Va última y destacada.",
+      mine_value: "Lo que hace ganar la comparación: 'Gratis', '0%', '24 h'.",
+      footnote:
+        "La condición que hace verdadera la comparación. Sin esto es una afirmación que después contesta el cliente.",
+    },
+    component: ComparisonRows,
+  },
+  {
+    slug: "big-number",
+    name: "Número gigante",
+    description:
+      "Una sola cifra enorme y todo lo demás chico. Para descuentos, plazos y resultados.",
+    role: "single",
+    formats: ["feed", "story"],
+    slots: bigNumberSlots,
+    slotLabels: {
+      eyebrow: "Antetítulo",
+      number: "El número",
+      unit: "Unidad",
+      support: "Bajada",
+      cta: "Llamado a la acción",
+    },
+    slotHints: {
+      eyebrow: "Lo que va arriba, chico: 'Aprovechá hasta', 'Ahorrás'. Opcional.",
+      number: "La cifra sola: '20%', '$36.000', '3x'. Cuanto más corta, más grande se ve.",
+      unit: "La palabra que la completa, en su propia línea: 'OFF', 'anual'. Opcional.",
+      support: "Una línea que dice de qué se trata. Opcional.",
+      cta: "Dos o tres palabras en imperativo. Opcional.",
+    },
+    component: BigNumber,
+  },
+  {
+    slug: "before-after",
+    name: "Antes y después",
+    description:
+      "La forma vieja tachada y la nueva abajo. Para reemplazos, migraciones y simplificaciones.",
+    role: "single",
+    formats: ["feed", "story"],
+    slots: beforeAfterSlots,
+    usesBackground: false,
+    slotLabels: {
+      before: "Antes (tachado)",
+      after: "Después",
+      support: "Bajada",
+      cta: "Llamado a la acción",
+    },
+    slotHints: {
+      before:
+        "Lo que se reemplaza. Escribilo como par con el de abajo: 'Cinco herramientas'.",
+      after: "Lo que lo reemplaza, en la misma clave: 'Una suscripción'.",
+      support: "Una línea de contexto. Opcional.",
+      cta: "Dos o tres palabras en imperativo. Opcional.",
+    },
+    component: BeforeAfter,
+  },
+  {
+    slug: "feature-stack",
+    name: "Beneficios sobre la imagen",
+    description:
+      "Tarjetas translúcidas con tildes sobre la foto. Para prestaciones, promos y planes.",
+    role: "single",
+    formats: ["feed", "story"],
+    slots: featureStackSlots,
+    slotLabels: {
+      headline: "Titular",
+      item_1: "Beneficio 1",
+      item_2: "Beneficio 2",
+      item_3: "Beneficio 3",
+      cta: "Llamado a la acción",
+      footnote: "Letra chica",
+    },
+    slotHints: {
+      headline: "La promesa que los beneficios sostienen.",
+      item_1: "Un beneficio concreto por tarjeta. Sin subordinadas.",
+      item_2: "Segundo beneficio. Opcional.",
+      item_3: "Tercero. Con dos suele alcanzar.",
+      cta: "La acción concreta: 'Activá tu cuenta'. Opcional.",
+      footnote: "La condición de la que dependen los beneficios. Opcional pero casi siempre necesaria.",
+    },
+    component: FeatureStack,
+  },
+  {
     slug: "carousel-cover",
     name: "Carrusel · tapa",
     description:
@@ -361,6 +476,39 @@ export const TEMPLATE_SAMPLES: Record<string, Record<string, string>> = {
     headline: "Cosecha 2026, ya disponible",
     detail: "Sólo 400 botellas numeradas. Cuando se termina, se termina.",
     cta: "Reservá la tuya",
+  },
+  "comparison-rows": {
+    headline: "Lo que cobra cada uno por cargar tu catálogo",
+    row_1_label: "Agencia tradicional",
+    row_1_value: "$180.000",
+    row_2_label: "Freelance",
+    row_2_value: "$90.000",
+    row_3_label: "Hacerlo vos",
+    row_3_value: "12 h",
+    mine_label: "Synera",
+    mine_value: "Incluido",
+    footnote: "Catálogo de hasta 200 productos, precios de agosto 2026.",
+  },
+  "big-number": {
+    eyebrow: "Recuperás",
+    number: "3 h",
+    unit: "por semana",
+    support: "Es lo que hoy se te va buscando presupuestos viejos.",
+    cta: "Ver cómo",
+  },
+  "before-after": {
+    before: "Tres planillas y un cuaderno",
+    after: "Una sola pantalla",
+    support: "El seguimiento dejó de depender de que alguien se acuerde.",
+    cta: "Ver el caso",
+  },
+  "feature-stack": {
+    headline: "Todo lo que entra en el plan de agosto",
+    item_1: "Doce piezas al mes, guionadas y diseñadas",
+    item_2: "Calendario cargado con dos semanas de anticipación",
+    item_3: "Cambios ilimitados hasta que salga como lo pensaste",
+    cta: "Escribinos por DM",
+    footnote: "Plan mensual, sin permanencia mínima. Precios de agosto 2026.",
   },
   "carousel-cover": {
     headline: "Cinco cosas que tu pyme deja de perder con un CRM",

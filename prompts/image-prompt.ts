@@ -98,6 +98,16 @@ const COMPOSITION_BY_TEMPLATE: Record<string, string> = {
     "Composition: this image is CROPPED to a horizontal band, not shown whole. Put the subject dead centre and leave room on all four sides, because the top and bottom will be cut away. Nothing important near any edge.",
   "product-hero":
     "Composition: a setting with a clear surface — a counter, a table, a shelf, a ledge — running across the middle of the frame. The middle band is the emptiest part of the image. The top and bottom fifths are calm and darker, because a headline sits at the top and a caption at the bottom.",
+  /*
+    A single figure at ~300px sits in the middle of this one, so the image is
+    asked for as atmosphere and nothing else. Naming what it should BE — light,
+    depth, texture — rather than only what to leave out, because a prompt that
+    is purely prohibition tends to produce the thing it forbids.
+  */
+  "big-number":
+    "Composition: almost abstract and extremely simple — soft directional light falling across a plain surface, deep shadow, or heavily out-of-focus texture. No recognisable object, no horizon, no busy detail anywhere. The centre of the frame is the emptiest and darkest part of the image, because one enormous figure sits there.",
+  "feature-stack":
+    "Composition: the subject sits in the TOP third only and is the single point of interest. The lower two thirds fall away into calm, even, darkening tone — a surface, a wall, soft falloff — with nothing the eye needs to read, because a stack of panels covers that area entirely.",
 };
 
 /*

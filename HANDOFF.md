@@ -279,6 +279,7 @@ template automatically teaches the prompts its slot names and character limits.
 | Scene reference does not tint the set | **PASS after a fix the probe forced** — prompt `.3` returned a kitchen painted the bottle's own olive green. `.4` takes the light and refuses the colour; same reference, green gone |
 | Tab completion, **measured in the browser** | **PASS, 2026-08-07** — empty field + Tab fills it and keeps focus; second Tab leaves; Shift+Tab never completes; the value SURVIVES a react-hook-form re-render, which is what proves the native-setter write reached React. Ghost overlay: box delta 0px on all four sides, identical font/line-height/padding, and it re-wraps with the field at 261px wide |
 | Sticky shell and section labels, **measured** | **PASS** — at `scrollY 1565` the aside sits at `top: 0` with the nav visible, and the section label in play sits at `top: 24` (its `top-6`). Before, the aside stretched to document height and left an empty column |
+| Four new templates, geometry measured | **PASS after one fix the measurement forced** — 16 renders (4 templates × feed/story × sample/at-the-cap), zero clipping in any direction. `big-number` first came back 256px over: `unit` inherited 82% of the number size regardless of its own length, so "por semana" at 243px ran off the card. **Not verified: how they look** — the browser pane could not composite, so no screenshot was taken. Someone has to open `/plantillas` |
 
 **The PNG export — CLOSED, 2026-08-06.**
 
@@ -987,6 +988,54 @@ description, because a 403 and a 404 ask for different things.
 
 Some sites (despegar.com.ar) refuse a Chrome User-Agent too. Those are reported,
 not worked around.
+
+### Skills
+
+`.claude/skills/` — two, both encoding conventions this file already documents
+in prose and that were being re-derived from it every session.
+
+- **`verificar`** — writing a `verify:*` (offline assertions) or `probe:*` (live,
+  costs money) script: how to choose, the harness to copy, the header convention
+  ("say what could go wrong, not what the file does"), registration, and the
+  rules that came out of real failures — assert both directions, test the
+  boundary, assert the *copy* not only the code path, prove the test is real by
+  reintroducing the bug once.
+- **`plantilla`** — adding a slide template: the three places to touch, what
+  each registry flag changes, the render rules (never hardcode a colour or a
+  family, `fitTextSize` on free-text slots, branch on `format`), and the
+  invariants `verify:products` enforces.
+
+Nothing else is installed. Of the official marketplace only `frontend-design`
+and `skill-creator` are relevant here; the rest is Discord, iMessage, plugin and
+MCP-server development.
+
+### Four templates from advertising structures
+
+Built from ten Instagram ad screenshots, taking the STRUCTURE and none of the
+branding — the palette, typeface and logo come from the client's Brand Kit at
+render time, which is the point of the system.
+
+| Slug | Structure | Image |
+|---|---|---|
+| `comparison-rows` | stacked rows, competitors muted, the brand's row last and winning. Rows widen as they descend so the eye reaches the winner before reading | none |
+| `big-number` | one figure at ~300px, everything else deliberately tiny | yes, asked for almost nothing |
+| `before-after` | the old way struck through, the replacement underneath | none |
+| `feature-stack` | translucent benefit panels over the photograph | yes |
+
+Two carry `usesBackground: false`, which is a feature and not a shortcut: no
+paid image, no wait, and nothing that can look AI-generated.
+
+**Two details worth keeping:** the strike in `before-after` is a positioned div
+rather than `text-decoration: line-through`, so its weight and colour are
+controllable and its behaviour inside the `<foreignObject>` export is the same
+geometry everything else already relies on. And the tick in `feature-stack` is
+drawn from two borders and a rotation rather than a `✓` — the brand's .woff2 is
+a subset that may not carry U+2713, which in the PNG means a silent fallback or
+tofu.
+
+Both `comparison-rows` and `feature-stack` carry a `footnote` slot for the
+condition the claim depends on. Every real ad of those shapes has one, and a
+comparison published without it is a claim the client answers for.
 
 ### Tab turns a placeholder into a value
 
