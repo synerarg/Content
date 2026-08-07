@@ -1,4 +1,4 @@
-import { toCanvas } from "html-to-image";
+import { toCanvas, toSvg } from "html-to-image";
 import { ensureFontsLoaded, type BrandFontRow } from "@/lib/render/brand-tokens";
 import {
   analyzeTextBoxes,
@@ -109,8 +109,13 @@ export async function checkSlideLegibility({
       background colour, which almost always has excellent contrast. The check
       would report a clean pass on the very slide that fails. A false alarm is
       annoying; a false all-clear is the failure this feature exists to prevent.
+
+      `toSvg`, not `toCanvas`: the warm-up's whole job is filling the library's
+      resource cache, which happens in the clone-and-embed phase that both share.
+      Drawing a canvas and throwing it away adds nothing. Same reasoning as
+      lib/export/rasterize.ts, where it matters far more.
     */
-    await withTimeout(toCanvas(node, options), TIMEOUT_MS);
+    await withTimeout(toSvg(node, options), TIMEOUT_MS);
     const canvas = await withTimeout(toCanvas(node, options), TIMEOUT_MS);
 
     const context = canvas.getContext("2d", { willReadFrequently: true });

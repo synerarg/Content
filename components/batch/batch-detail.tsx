@@ -34,6 +34,7 @@ import {
   downloadBlob,
   rasterizeSlide,
   readPngDimensions,
+  resetRasterizeCache,
   toObjectUrl,
 } from "@/lib/export/rasterize";
 import { buildCaptionMarkdown, buildZip, slugify, type ZipEntry } from "@/lib/export/zip";
@@ -333,6 +334,10 @@ export function BatchDetail({
     return () => {
       for (const url of urls.values()) URL.revokeObjectURL(url);
       urls.clear();
+      // The rasterizer remembers which resources it has warmed, keyed by URL.
+      // Every one of those URLs has just been revoked, so the entries can only
+      // take up room from here.
+      resetRasterizeCache();
     };
   }, []);
 
@@ -469,6 +474,10 @@ export function BatchDetail({
     setExporting(true);
     const entries: ZipEntry[] = [];
     const batchSlug = slugify(batchTitle, "lote");
+    // Reported in the success toast. Rasterization is the slowest thing this
+    // app does and it cannot be profiled from a session, so the number has to
+    // reach whoever can compare it.
+    const startedAt = Date.now();
 
     try {
       let done = 0;
@@ -535,8 +544,10 @@ export function BatchDetail({
       setProgress("Armando el ZIP…");
       const zip = await buildZip(entries);
       downloadBlob(zip, `${batchSlug}.zip`);
+      const images = entries.filter((e) => "blob" in e).length;
+      const seconds = (Date.now() - startedAt) / 1000;
       toast.success(
-        `ZIP listo: ${entries.filter((e) => "blob" in e).length} imágenes.`,
+        `ZIP listo: ${images} imágenes en ${seconds.toFixed(1)}s (${(seconds / Math.max(1, images)).toFixed(1)}s por placa).`,
       );
     } catch (cause) {
       notifyError(cause, { retry: handleExportZip });
