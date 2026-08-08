@@ -57,6 +57,12 @@ public by design and safe; everything else is not.
 - All database work goes through the **Supabase CLI**, already installed as a
   devDependency and already linked. `supabase db push` against a *remote* project does
   **not** need Docker.
+- **The Vercel MCP connector has the same problem**, checked 2026-08-07: it is scoped
+  to `guralniktomas-gmailcom's projects`, whose five projects are all unrelated
+  (`marka`, `update-genesis`, three `v0-*`). This app is not among them, so a deploy
+  here **cannot be inspected from a Claude session** — no build logs, no runtime
+  errors, no deployment status. Check the Vercel dashboard by hand. And as with
+  Supabase: those five belong to someone else, so do not act on them.
 - **Docker is NOT installed** on this machine. That rules out `supabase start`,
   `supabase db dump`, and `supabase db diff`. `db push` and `gen types` work fine.
   Expect a harmless `failed to cache migrations catalog … Docker` warning on every push.
