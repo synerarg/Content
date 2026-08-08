@@ -19,8 +19,17 @@ import {
  * 2026-08-07.1 — products. A batch can carry one, in which case the copy is
  * about that product and the scene briefs for its pieces describe an EMPTY
  * place rather than the product itself.
+ *
+ * 2026-08-07.2 — the scene stops being generic. Reported from use: the images
+ * came back as "any brand's stock photo" however specific the batch brief was.
+ * The brief DOES reach them — but only through `background_brief`, which this
+ * prompt was asking for in four lines, the first of which said "corta". Two
+ * changes, and the second is the one with a mechanism behind it: the section now
+ * demands concrete nouns lifted from the brief and rejects a scene that would
+ * suit any other client, AND `background_brief` moved after `slides` in the
+ * schema so the model writes the scene knowing the headline it sits behind.
  */
-export const BATCH_PROMPT_VERSION = "2026-08-07.1";
+export const BATCH_PROMPT_VERSION = "2026-08-07.2";
 
 function describeTemplate(template: AnyTemplateDefinition): string {
   const slots = Object.keys(template.slots.shape).map((key) => {
@@ -62,6 +71,7 @@ CATÁLOGO DE PLANTILLAS
 ${templates.map(describeTemplate).join("\n\n")}
 
 REGLAS DE ESCRITURA
+- El objeto "slots" lista los slots de TODAS las plantillas. Llená únicamente los de la plantilla que elegiste para esa placa y dejá todos los demás en cadena vacía (""). Un slot lleno que no pertenece a la plantilla se descarta.
 - Respetá los límites de caracteres. Son límites duros del diseño.
 - Los slots opcionales pueden ir vacíos (""). Vacío es mejor que relleno.
 - Sin comillas alrededor de las citas: el diseño ya las dibuja.
@@ -75,8 +85,11 @@ Si la marca usa voseo rioplatense, usá voseo consistente: "tenés", "podés", "
 Entre 3 y 8 hashtags por pieza, sin #, en minúscula, específicos del rubro y del mercado argentino.
 
 FONDO
-Cada pieza lleva un background_brief: una descripción corta de la ESCENA fotográfica que va de fondo.
-Describí un lugar o una situación real y concreta, no un concepto abstracto.
+Cada pieza lleva un background_brief: la ESCENA fotográfica que va detrás del texto. Lo escribís DESPUÉS de las placas, sabiendo ya qué dice el titular.
+La escena es de ESTA pieza, no de la marca en general. Si el titular habla de camionetas paradas, la escena pasa donde están las camionetas; si habla de una cocina a las siete de la mañana, pasa en esa cocina a esa hora.
+Nombrá cosas concretas sacadas del brief: el lugar donde ocurre, el oficio de quien está ahí, el objeto que se usa, el momento del día. Con tres o cuatro elementos alcanza.
+Una escena que serviría igual para cualquier otra marca está mal, por más linda que sea. Ese es el error a evitar, y es el más fácil de cometer.
+Mal: "una oficina moderna y luminosa con plantas". Bien: "el playón de una empresa de logística a las siete de la mañana, tres camionetas blancas alineadas, un mecánico agachado junto a una rueda".
 En un carrusel, todas las placas comparten la misma escena base para que se lean como un set.
 No menciones texto, carteles ni logos: eso ya se excluye por otro lado.
 

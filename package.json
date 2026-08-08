@@ -22,7 +22,8 @@
     "probe:image-prompt": "tsx --require ./scripts/_stub-server-only.cjs scripts/probe-image-prompt.ts",
     "probe:scene-ab": "tsx --require ./scripts/_stub-server-only.cjs scripts/probe-scene-reference.ts",
     "probe:embeddings": "tsx --require ./scripts/_stub-server-only.cjs scripts/probe-embeddings.ts",
-    "probe:carousel": "tsx --require ./scripts/_stub-server-only.cjs scripts/probe-carousel-cohesion.ts"
+    "probe:carousel": "tsx --require ./scripts/_stub-server-only.cjs scripts/probe-carousel-cohesion.ts",
+    "probe:scene-brief": "tsx --require ./scripts/_stub-server-only.cjs scripts/probe-scene-brief.ts"
   },
   "overrides": {
     "postcss": "^8.5.25",

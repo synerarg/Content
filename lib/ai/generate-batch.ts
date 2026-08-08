@@ -7,6 +7,7 @@ import {
   PRODUCT_TEMPLATES,
   TEMPLATES,
   getTemplate,
+  requiredSlots,
   templatesByRole,
   type AnyTemplateDefinition,
 } from "@/templates/registry";
@@ -41,28 +42,116 @@ export const BATCH_MODEL = "claude-sonnet-5";
   trimmed afterwards.
 */
 
-function lenientSlots(template: AnyTemplateDefinition) {
+/*
+  ONE object with every slot name in the catalogue, not a union per template.
+
+  It was a discriminated union — one variant per template, each carrying that
+  template's exact slot names — and that union was what guaranteed at the schema
+  level that a `quote` could not land in a `bold-headline`. It had a ceiling
+  nobody had measured. Anthropic compiles the output schema to a grammar and
+  rejects one that grows too large, and measured 2026-08-07 the eleventh
+  template crossed it:
+
+    10 plantillas -> esquema 4412 car. -> OK
+    11 plantillas -> esquema 5117 car. -> 400 "compiled grammar is too large"
+
+  The failure takes the WHOLE batch, not one piece, and it arrived the moment
+  four templates were added — so the shape was one template away from breaking
+  for anyone who added one.
+
+  The first replacement was `slots: z.record(z.string(), z.string())`. It
+  compiled and it was WORSE: every slide came back `"slots": {}`. A batch that
+  looks complete — caption, hashtags, CTA all present — with every slide blank
+  is a far more expensive failure than a 400, because nothing announces it.
+  Recorded here so nobody tries it again.
+
+  What works, and is measured: a single object holding the UNION OF SLOT NAMES
+  across all templates, every one a plain string. 31 keys today, 2402
+  characters — smaller than the original ten-template union — and it grows only
+  when a template introduces a slot NAME nobody else uses, not with every
+  template added. Verified live: asked for `bold-headline`, the model filled
+  headline/subline/cta and left the other 28 empty.
+
+  What it gives up is the schema-level guarantee about which slots belong to
+  which template. Not given up for nothing: the prompt already describes every
+  template's slots with hints and character limits, it now says explicitly to
+  leave the rest empty, and `alignSlots` below drops anything the template does
+  not declare and warns when a required slot came back blank. Same philosophy as
+  `repairCarousel` — a model slip becomes a visible warning rather than a crash
+  or a silent wrong render.
+*/
+const TEMPLATE_SLUGS = TEMPLATES.map((template) => template.slug) as [
+  string,
+  ...string[],
+];
+
+export const ALL_SLOT_KEYS = [
+  ...new Set(TEMPLATES.flatMap((template) => Object.keys(template.slots.shape))),
+].sort();
+
+function allSlotsSchema() {
   const shape: Record<string, z.ZodString> = {};
-  for (const key of Object.keys(template.slots.shape)) {
-    shape[key] = z.string();
-  }
+  for (const key of ALL_SLOT_KEYS) shape[key] = z.string();
   return z.object(shape);
 }
 
-const slideVariants = TEMPLATES.map((template) =>
-  z.object({
-    template_slug: z.literal(template.slug),
-    slots: lenientSlots(template),
-  }),
-);
+const slideChoice = z.object({
+  template_slug: z.enum(TEMPLATE_SLUGS),
+  slots: allSlotsSchema(),
+});
 
-const slideChoice = z.union(
-  slideVariants as unknown as [
-    (typeof slideVariants)[number],
-    (typeof slideVariants)[number],
-    ...(typeof slideVariants)[number][],
-  ],
-);
+/**
+ * Keep only the slots this template declares, and say what was wrong.
+ *
+ * Unknown keys are dropped rather than carried: a value under a key no
+ * component reads is invisible, and leaving it in the record would make the
+ * piece look complete to anything counting fields. A required slot that came
+ * back empty is warned about but not invented — the export gate already refuses
+ * to rasterize it, and a fabricated headline is worse than a visible gap.
+ */
+function alignSlots(
+  template: AnyTemplateDefinition,
+  slots: Record<string, string>,
+  pieceLabel: string,
+  warnings: string[],
+): Record<string, string> {
+  const declared = Object.keys(template.slots.shape);
+  const aligned: Record<string, string> = {};
+  for (const key of declared) aligned[key] = slots[key] ?? "";
+
+  /*
+    Only keys that came back WITH TEXT are worth reporting.
+
+    Every slide now carries all 31 slot names by construction, so ~28 of them
+    are empty and expected. Warning about those would bury the one warning that
+    means something — the model wrote a `quote` into a template that has no
+    place to put it — under a wall of noise, which is how warnings stop
+    being read.
+  */
+  const unknown = Object.keys(slots).filter(
+    (key) => !declared.includes(key) && (slots[key] ?? "").trim().length > 0,
+  );
+  if (unknown.length > 0) {
+    warnings.push(
+      `${pieceLabel}: la plantilla "${template.slug}" no tiene ${unknown
+        .map((key) => `"${key}"`)
+        .join(", ")}; se descartaron.`,
+    );
+  }
+
+  const emptyRequired = requiredSlots(template).filter(
+    (key) => aligned[key].trim().length === 0,
+  );
+  if (emptyRequired.length > 0) {
+    warnings.push(
+      `${pieceLabel}: quedó sin ${emptyRequired
+        .map((key) => `"${key}"`)
+        .join(", ")} en "${template.slug}". Completalo antes de exportar.`,
+    );
+  }
+
+  return aligned;
+}
 
 export const batchSchema = z.object({
   title: z.string(),
@@ -78,9 +167,20 @@ export const batchSchema = z.object({
         caption: z.string(),
         hashtags: z.array(z.string()),
         cta: z.string(),
-        /** Scene for the background image; carousels share one. */
-        background_brief: z.string(),
         slides: z.array(slideChoice),
+        /*
+          LAST, and the position is the point.
+
+          A structured output is emitted in schema order, so this field used to
+          be written BEFORE the slides — the model chose the photograph before
+          it knew what the headline said, and could not tie one to the other
+          even if the prompt asked it to. Which the prompt now does; see
+          BATCH_PROMPT_VERSION 2026-08-07.2. Moving it after `slides` is half of
+          that change and costs nothing.
+
+          Scene for the background image; a carousel's slides share one.
+        */
+        background_brief: z.string(),
       }),
     )
     .min(1),
@@ -363,12 +463,16 @@ export async function generateBatch(input: {
       .filter(Boolean),
     cta: post.cta.trim(),
     backgroundBrief: post.background_brief.trim(),
-    slides: post.slides.map((slide) => {
+    slides: post.slides.map((slide, index) => {
       const template = getTemplate(slide.template_slug);
       const slots = slide.slots as Record<string, string>;
       if (!template) return { templateSlug: slide.template_slug, slots };
 
-      const trimmed = trimToLimits(template, slots);
+      // Align BEFORE trimming: trimming iterates the keys it is given, so a
+      // stray one would otherwise be measured, reported and carried along.
+      const label = `${KIND_LABEL[post.type]} · placa ${index + 1}`;
+      const aligned = alignSlots(template, slots, label, warnings);
+      const trimmed = trimToLimits(template, aligned);
       warnings.push(...trimmed.warnings);
       return { templateSlug: slide.template_slug, slots: trimmed.slots };
     }),

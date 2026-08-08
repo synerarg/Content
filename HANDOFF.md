@@ -279,6 +279,8 @@ template automatically teaches the prompts its slot names and character limits.
 | Scene reference does not tint the set | **PASS after a fix the probe forced** — prompt `.3` returned a kitchen painted the bottle's own olive green. `.4` takes the light and refuses the colour; same reference, green gone |
 | Tab completion, **measured in the browser** | **PASS, 2026-08-07** — empty field + Tab fills it and keeps focus; second Tab leaves; Shift+Tab never completes; the value SURVIVES a react-hook-form re-render, which is what proves the native-setter write reached React. Ghost overlay: box delta 0px on all four sides, identical font/line-height/padding, and it re-wraps with the field at 261px wide |
 | Sticky shell and section labels, **measured** | **PASS** — at `scrollY 1565` the aside sits at `top: 0` with the nav visible, and the section label in play sits at `top: 24` (its `top-6`). Before, the aside stretched to document height and left an empty column |
+| Scene brief `2026-08-07.2`, **live A/B** (`npm run probe:scene-brief`) | **PASS, and by more than expected** — same brief through both prompt versions, three pieces each, then six images. The old version photographed the INDUSTRY (a van on a lift, four vans parked in a row, an empty warehouse); the new one photographs the ARGUMENT — a driver checking his watch beside a van with the hood up and pallets waiting, **a visible empty gap between two vans where the third should be**, a truck broken down on the shoulder at dusk. Legibility unaffected: all three keep a large calm area |
+| Scene brief — what did NOT transfer | **Place does not survive.** "Una avenida del conurbano" came back as an American highway with a vintage Chevrolet; number plates elsewhere read European. Also: three of three new images contain a person, against zero of three old ones — no `avoid` rule is broken (nobody smiles at camera) but it is a real change in kind, and some brands will not want faces |
 | Four new templates, geometry measured | **PASS after one fix the measurement forced** — 16 renders (4 templates × feed/story × sample/at-the-cap), zero clipping in any direction. `big-number` first came back 256px over: `unit` inherited 82% of the number size regardless of its own length, so "por semana" at 243px ran off the card. **Not verified: how they look** — the browser pane could not composite, so no screenshot was taken. Someone has to open `/plantillas` |
 
 **The PNG export — CLOSED, 2026-08-06.**
@@ -331,6 +333,29 @@ users. Do not present it as full RLS verification.
 ---
 
 ## 7. Traps — every one of these cost real time
+
+**The batch output schema has a size ceiling, and the eleventh template hit it.**
+`slides` was a discriminated union with one variant per template, each carrying
+that template's exact slot names — which is what guaranteed a `quote` could not
+land in a `bold-headline`. Anthropic compiles the output schema to a grammar and
+rejects one that grows too large. Measured 2026-08-07: **10 templates → 4412
+characters → OK; 11 → 5117 → `400 "The compiled grammar is too large"`**, and the
+failure takes the whole batch. Four templates were added in one commit, so the
+shape was already one template away from breaking for whoever added the next one.
+
+The first fix was `slots: z.record(z.string(), z.string())`. It compiled, and it
+was **worse**: every slide came back `"slots": {}`. A batch with caption,
+hashtags and CTA all present and every slide blank is far more expensive than a
+400, because nothing announces it. **Do not try that again.**
+
+What works, measured: **one object holding the union of slot NAMES across all
+templates**, every one a plain string — 31 keys, 2402 characters, smaller than
+the original ten-template union, and it only grows when a template introduces a
+slot name nobody else uses. Asked for `bold-headline`, the model fills
+headline/subline/cta and leaves the other 28 empty. The lost schema-level
+guarantee is replaced by `alignSlots`, which drops undeclared keys and warns —
+and warns only about undeclared keys that came back **with text**, since ~28
+empty ones per slide are now expected by construction.
 
 **Prepending `https://` to a URL is not a scheme check, and it accepted
 `file:///etc/passwd`.** `normalizeSiteUrl` tested for `^https?://` and prepended
@@ -1008,6 +1033,31 @@ in prose and that were being re-derived from it every session.
 Nothing else is installed. Of the official marketplace only `frontend-design`
 and `skill-creator` are relevant here; the rest is Discord, iMessage, plugin and
 MCP-server development.
+
+### Why the images were generic, and what fixed it
+
+Reported from use: however specific the batch brief was, the backgrounds came
+back looking like any brand's stock photo. The brief **does** reach them — but
+only through one derived field. Claude writes a `background_brief` per piece and
+that string is the entire input to the image model, so a generic image is a
+generic `background_brief`, and the question was what made Claude write one.
+
+Two causes, both fixed in prompt `2026-08-07.2`:
+
+1. **The FONDO section asked for "una descripción corta" of "un lugar"** and
+   never said the scene had to belong to THIS piece. "Una oficina moderna y
+   luminosa" satisfies every word of that. It now demands concrete nouns lifted
+   from the brief, and states outright that a scene which would suit any other
+   brand is wrong however pretty it is — with a bad example and a good one, the
+   pattern that made the PRODUCTO section work.
+2. **`background_brief` sat before `slides` in the schema.** A structured output
+   is emitted in schema order, so the model chose the photograph before it knew
+   what the headline said. Moving it after `slides` costs nothing.
+
+The A/B is in the verification table. The short version: the old prompt
+photographed the industry, the new one photographs the argument — for a brief
+about vans standing idle, it returned a yard with a visible gap where the third
+van should be.
 
 ### Four templates from advertising structures
 
