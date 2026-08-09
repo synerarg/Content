@@ -287,7 +287,7 @@ template automatically teaches the prompts its slot names and character limits.
 | Sticky shell and section labels, **measured** | **PASS** — at `scrollY 1565` the aside sits at `top: 0` with the nav visible, and the section label in play sits at `top: 24` (its `top-6`). Before, the aside stretched to document height and left an empty column |
 | Render fingerprint, 30 asserts (`npm run verify:render`) | PASS — every field of `FingerprintInput` walked one at a time, plus a check that the walk itself covers the type, so a field added later without being hashed fails here. Key-order independence, the absent-vs-empty slot decision, and 2000 realistic variations with no collision. **Verified to be a real test:** dropping `backgroundPath` from the payload fails exactly the two assertions about it, with the identical hashes printed as the detail |
 | `renders` bucket denies anonymous reads (`npm run verify:rls`) | PASS — 16 checks now: 12 tenant relations plus both private buckets on both the public and the authenticated object endpoints. Bucket privacy and bucket POLICIES are separate settings and this checks the second |
-| Render round trip (browser → Storage → signed URL) | **NOT VERIFIED.** Needs a logged-in session, which an agent session cannot have here. The pieces are checked individually; the trip is not. Save one batch by hand and confirm the chip says "PNG guardado" |
+| Render round trip (browser → Storage → signed URL) | **PASS, confirmed by the account owner on 2026-08-09.** Could not be checked from an agent session — it needs a logged-in browser — so it shipped as an open item and was closed by hand: "Guardar placas" on a real batch, chip reads "PNG guardado" |
 | Scene brief `2026-08-07.2`, **live A/B** (`npm run probe:scene-brief`) | **PASS, and by more than expected** — same brief through both prompt versions, three pieces each, then six images. The old version photographed the INDUSTRY (a van on a lift, four vans parked in a row, an empty warehouse); the new one photographs the ARGUMENT — a driver checking his watch beside a van with the hood up and pallets waiting, **a visible empty gap between two vans where the third should be**, a truck broken down on the shoulder at dusk. Legibility unaffected: all three keep a large calm area |
 | Scene brief — what did NOT transfer | **Place does not survive.** "Una avenida del conurbano" came back as an American highway with a vintage Chevrolet; number plates elsewhere read European. Also: three of three new images contain a person, against zero of three old ones — no `avoid` rule is broken (nobody smiles at camera) but it is a real change in kind, and some brands will not want faces |
 | Four new templates, geometry measured | **PASS after one fix the measurement forced** — 16 renders (4 templates × feed/story × sample/at-the-cap), zero clipping in any direction. `big-number` first came back 256px over: `unit` inherited 82% of the number size regardless of its own length, so "por semana" at 243px ran off the card. **Not verified: how they look** — the browser pane could not composite, so no screenshot was taken. Someone has to open `/plantillas` |
@@ -1302,12 +1302,35 @@ Still open:
    authenticated screenshot exists. The two product templates, the checkerboard preview
    and the cut-out have been verified by typecheck, lint, a production build and 31
    assertions, **not by eye**.
-6. **Nothing publishes anything.** The calendar (§11) is a PLAN, not a scheduler: no job,
-   no queue and no integration acts on a date. A piece due Thursday changes what the
-   screens say and nothing else. The Instagram Graph API route in §13 is what would close
-   it, along with the per-tenant-secrets problem described there — this app currently
-   stores no third-party secrets at all, and `SUPABASE_SERVICE_ROLE_KEY` is deliberately
-   empty.
+6. **Nothing publishes anything — but step 1 of four is done.** The calendar (§11) is a
+   PLAN, not a scheduler: no job, no queue and no integration acts on a date. A piece due
+   Thursday changes what the screens say and nothing else.
+
+   What now exists is the part that had to come first: a finished placa persists to the
+   `renders` bucket and can be handed out as a signed URL, which is the shape Meta's
+   content-publishing API needs (it fetches a URL; it does not accept bytes). Confirmed
+   working by hand on 2026-08-09.
+
+   The remaining three, in order:
+   - **Meta OAuth and per-brand tokens.** Long-lived tokens expire at ~60 days and need
+     refreshing; a token that quietly went stale must be visible on screen, not in a log.
+     This app currently stores no third-party secrets at all and
+     `SUPABASE_SERVICE_ROLE_KEY` is deliberately empty, so this is the first time that
+     problem has to be solved here.
+   - **The publish call.** Container → publish, plus the carousel case (children first,
+     then a container that groups them). Limit is 100 published posts per 24 h; a
+     carousel counts as one.
+   - **The scheduler.** The API publishes immediately and does not schedule, so a cron
+     has to fire. `scheduled_on` + `scheduled_time` are a Buenos Aires WALL CLOCK
+     (migration 0014) — resolving that to an instant is the same trap that produced the
+     `formatDay` bug. It must also be idempotent: a cron that runs twice cannot publish
+     twice.
+
+   **The blocker is not code.** Publishing to the agency's own Instagram needs no review;
+   publishing to a CLIENT's account needs Advanced Access on
+   `instagram_business_content_publish`, which means Meta App Review — business
+   verification, a live app, a privacy policy, a data-deletion path, and a screencast per
+   permission. Two to six weeks, usually more than one round. See §13.
 
 **Vercel limits that shaped the design — keep them in mind**
 - **Request *and* response body cap 4.5 MB.** Hence: uploads go browser → signed URL →
