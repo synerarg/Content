@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { brandFormSchema, type BrandFormValues } from "@/lib/schemas/brand";
 import { createBrand, updateBrand } from "@/app/(app)/marcas/actions";
@@ -18,17 +19,45 @@ import { Label } from "@/components/ui/label";
 import { HelpTip } from "@/components/ui/help-tip";
 import { SuggestInput, SuggestTextarea } from "@/components/ui/suggest-field";
 
+/** Which <Section id> owns each top-level (or dotted) schema field, in the
+ * form's own visual order — so an invalid submit can jump to the right one. */
+const SECTION_BY_FIELD = {
+  name: "section-identidad",
+  tagline: "section-identidad",
+  logo_path: "section-identidad",
+  palette: "section-paleta",
+  typography: "section-tipografia",
+  tone_of_voice: "section-voz",
+  target_audience: "section-voz",
+  example_captions: "section-voz",
+  art_direction: "section-direccion-arte",
+} as const;
+
+/** Fields registered as a plain <Input>/<Textarea> whose id equals the field
+ * name, so they can be focused directly rather than just scrolled to. */
+const FOCUSABLE_FIELDS = new Set([
+  "name",
+  "tagline",
+  "tone_of_voice",
+  "target_audience",
+]);
+
 function Section({
+  id,
   title,
   description,
   children,
 }: {
+  id: string;
   title: string;
   description: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className="grid gap-6 border-b border-border py-8 md:grid-cols-[240px_1fr]">
+    <section
+      id={id}
+      className="grid gap-6 border-b border-border py-8 md:grid-cols-[240px_1fr] scroll-mt-6"
+    >
       {/*
         The label follows its own section down.
 
@@ -88,6 +117,35 @@ export function BrandForm({
     reset({ ...getValues(), ...draft }, { keepDefaultValues: true });
   }
 
+  /*
+    Before this, an invalid submit did nothing visible. `handleSubmit` never
+    calls `onSubmit` on a failing schema, and nothing scrolled or focused the
+    field that failed — so a Paleta error while editing Dirección de arte, five
+    sections down, looked exactly like the button just not working.
+  */
+  function onInvalid(formErrors: FieldErrors<BrandFormValues>) {
+    toast.error("Hay campos para corregir antes de guardar.");
+
+    const firstKey = (
+      Object.keys(SECTION_BY_FIELD) as Array<keyof typeof SECTION_BY_FIELD>
+    ).find((key) => formErrors[key]);
+    if (!firstKey) return;
+
+    document
+      .getElementById(SECTION_BY_FIELD[firstKey])
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+
+    // Only the plain registered fields have an <input>/<textarea> whose id
+    // matches the field name directly; Controller-driven fields (palette,
+    // typography, the string lists) render their own sub-inputs, so getting
+    // to the SECTION is the honest amount of help for those.
+    if (FOCUSABLE_FIELDS.has(firstKey)) {
+      requestAnimationFrame(() => {
+        document.getElementById(firstKey)?.focus({ preventScroll: true });
+      });
+    }
+  }
+
   async function onSubmit(values: BrandFormValues) {
     setPending(true);
     try {
@@ -120,7 +178,10 @@ export function BrandForm({
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="px-6 pb-16 md:px-8">
+    <form
+      onSubmit={handleSubmit(onSubmit, onInvalid)}
+      className="px-6 pb-16 md:px-8"
+    >
       {/* Only when creating: re-reading a site over an established kit would
           overwrite decisions someone already made. */}
       {mode === "create" ? (
@@ -130,6 +191,7 @@ export function BrandForm({
       ) : null}
 
       <Section
+        id="section-identidad"
         title="Identidad"
         description="Cómo se llama la marca y su logo."
       >
@@ -168,6 +230,7 @@ export function BrandForm({
       </Section>
 
       <Section
+        id="section-paleta"
         title="Paleta"
         description="Los tokens que las plantillas consumen como variables CSS. Nunca se hardcodean colores."
       >
@@ -185,6 +248,7 @@ export function BrandForm({
       </Section>
 
       <Section
+        id="section-tipografia"
         title="Tipografía"
         description="Se aloja en tu Storage para que el export sea idéntico al preview."
       >
@@ -198,6 +262,7 @@ export function BrandForm({
       </Section>
 
       <Section
+        id="section-voz"
         title="Voz"
         description="Lo que Claude usa para escribir el guion, el copy sobre la imagen y el caption."
       >
@@ -253,6 +318,7 @@ export function BrandForm({
       </Section>
 
       <Section
+        id="section-direccion-arte"
         title="Dirección de arte"
         description="Alimenta el prompt de imagen. El modelo genera solo fondos: el texto lo pone el código."
       >
@@ -297,27 +363,39 @@ export function BrandForm({
           />
         </div>
 
-        <div className="space-y-2">
-          <Label>Evitar</Label>
-          <p className="text-xs text-muted-foreground">
-            Se suma al prompt negativo. Las directivas de &ldquo;sin texto, sin
-            letras, sin logos&rdquo; ya van siempre, no hace falta repetirlas.
-          </p>
-          <Controller
-            control={control}
-            name="art_direction.avoid"
-            render={({ field }) => (
-              <StringListInput
-                value={field.value}
-                onChange={field.onChange}
-                addLabel="Agregar restricción"
-                placeholder="stock photo genérico"
-                max={30}
-                suggest
-              />
-            )}
-          />
-        </div>
+        {/*
+          Collapsed until there is something in it. A brand-new kit has
+          nothing to avoid yet, and the field is optional by schema — showing
+          its full chrome anyway is exactly the "wall of form" this was meant
+          to cut down on. It opens on its own the moment a restriction exists.
+        */}
+        <Controller
+          control={control}
+          name="art_direction.avoid"
+          render={({ field }) => (
+            <details className="group" open={field.value.length > 0}>
+              <summary className="flex cursor-pointer list-none items-center gap-1.5 marker:content-none">
+                <span className="text-sm font-medium">Evitar</span>
+                <ChevronDown className="size-3.5 text-muted-foreground transition-transform group-open:rotate-180" />
+              </summary>
+              <div className="mt-2 space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  Se suma al prompt negativo. Las directivas de &ldquo;sin
+                  texto, sin letras, sin logos&rdquo; ya van siempre, no hace
+                  falta repetirlas.
+                </p>
+                <StringListInput
+                  value={field.value}
+                  onChange={field.onChange}
+                  addLabel="Agregar restricción"
+                  placeholder="stock photo genérico"
+                  max={30}
+                  suggest
+                />
+              </div>
+            </details>
+          )}
+        />
       </Section>
 
       <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-border bg-background/80 py-4 backdrop-blur">

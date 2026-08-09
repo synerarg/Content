@@ -16,7 +16,7 @@ export function EmptyState({
       <span className="mb-5 flex size-11 items-center justify-center rounded-xl border border-[color-mix(in_oklch,var(--synera-accent)_22%,transparent)] bg-card">
         <Icon className="size-5 text-[var(--synera-accent)]" />
       </span>
-      <h2 className="text-base font-medium">{title}</h2>
+      <h2 className="text-base font-medium text-balance">{title}</h2>
       <p className="mt-2 max-w-sm text-sm text-muted-foreground">
         {description}
       </p>

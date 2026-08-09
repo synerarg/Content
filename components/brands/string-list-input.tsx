@@ -64,6 +64,7 @@ export function StringListInput({
             size="icon"
             onClick={() => onChange(value.filter((_, i) => i !== index))}
             title="Quitar"
+            aria-label="Quitar"
           >
             <X className="size-4" />
           </Button>

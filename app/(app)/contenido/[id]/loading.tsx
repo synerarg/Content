@@ -13,35 +13,41 @@ export default function BatchLoading() {
     <>
       <PageHeaderSkeleton />
       <div className="space-y-8 px-6 py-8 md:px-8">
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4">
-          <Skeleton className="h-4 w-44" />
-          <div className="flex flex-wrap gap-2">
-            <Skeleton className="h-8 w-24 rounded-md" />
-            <Skeleton className="h-8 w-40 rounded-md" />
-            <Skeleton className="h-8 w-24 rounded-md" />
-            <Skeleton className="h-9 w-36 rounded-md" />
+        {/* Toolbar: actions, queue, schedule — a hairline strip, not a card,
+            to match the real layout (batch-detail.tsx). */}
+        <div className="space-y-4 border-b border-border pb-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Skeleton className="h-4 w-44" />
+            <div className="flex flex-wrap gap-2">
+              <Skeleton className="h-8 w-24 rounded-md" />
+              <Skeleton className="h-8 w-40 rounded-md" />
+              <Skeleton className="h-8 w-24 rounded-md" />
+              <Skeleton className="h-9 w-36 rounded-md" />
+            </div>
           </div>
-        </div>
 
-        {/* The queue progress strip. */}
-        <Skeleton className="h-16 w-full rounded-xl" />
+          {/* The queue progress strip. */}
+          <Skeleton className="h-16 w-full rounded-xl" />
 
-        {/* SchedulePanel: a whole card between the actions and the pieces, and
-            the tallest thing this skeleton was missing. */}
-        <div className="space-y-4 rounded-xl border border-border bg-card p-5">
-          <Skeleton className="h-4 w-48" />
-          <div className="flex flex-wrap items-end gap-4">
-            <Skeleton className="h-9 w-36 rounded-md" />
-            <Skeleton className="h-9 w-28 rounded-md" />
-            <Skeleton className="h-9 w-64 rounded-full" />
-            <Skeleton className="h-5 w-44" />
+          {/* SchedulePanel. */}
+          <div className="space-y-4 border-t border-border pt-4">
+            <Skeleton className="h-4 w-48" />
+            <div className="flex flex-wrap items-end gap-4">
+              <Skeleton className="h-9 w-36 rounded-md" />
+              <Skeleton className="h-9 w-28 rounded-md" />
+              <Skeleton className="h-9 w-64 rounded-full" />
+              <Skeleton className="h-5 w-44" />
+            </div>
+            <Skeleton className="h-3 w-96 max-w-full" />
+            <Skeleton className="h-9 w-32 rounded-md" />
           </div>
-          <Skeleton className="h-3 w-96 max-w-full" />
-          <Skeleton className="h-9 w-32 rounded-md" />
         </div>
 
         {Array.from({ length: 2 }, (_, post) => (
-          <section key={post} className="space-y-4">
+          <section
+            key={post}
+            className="space-y-4 rounded-xl border border-border bg-card p-5"
+          >
             <div className="flex flex-wrap items-center gap-3">
               <Skeleton className="h-6 w-24 rounded-full" />
               <Skeleton className="h-4 w-16" />
@@ -50,15 +56,17 @@ export default function BatchLoading() {
               <Skeleton className="h-8 w-24 rounded-md" />
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
+            {/* One grid row per slide: preview and its own fields together,
+                not two independently-scrolling columns. */}
+            <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
               <div className="space-y-2">
                 <SlidePreviewSkeleton />
                 <Skeleton className="h-8 w-full rounded-md" />
-                {/* The advanced disclosure line under each preview. */}
+                {/* The "Detalles" disclosure line under each preview. */}
                 <Skeleton className="h-3 w-20" />
               </div>
 
-              <div className="space-y-6">
+              <div className="space-y-3">
                 <Skeleton className="h-3 w-56" />
                 {Array.from({ length: 3 }, (_, field) => (
                   <div key={field} className="space-y-1.5">
@@ -66,11 +74,12 @@ export default function BatchLoading() {
                     <Skeleton className="h-9 w-full rounded-md" />
                   </div>
                 ))}
-                <div className="space-y-3 border-t border-border pt-4">
-                  <Skeleton className="h-3 w-20" />
-                  <Skeleton className="h-28 w-full rounded-md" />
-                </div>
               </div>
+            </div>
+
+            <div className="space-y-3 border-t border-border pt-4">
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-28 w-full rounded-md" />
             </div>
           </section>
         ))}

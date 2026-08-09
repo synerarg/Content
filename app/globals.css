@@ -72,6 +72,12 @@
 .dark {
   --radius: 0.625rem;
 
+  /* UI motion: ease-out for anything entering/responding, ease-in-out for
+     on-screen movement. Never ease-in — it delays the frame the user is
+     watching most closely. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+
   /* Surfaces */
   --background: oklch(0.16 0.008 255);
   --foreground: oklch(0.96 0.004 250);

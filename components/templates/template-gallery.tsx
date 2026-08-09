@@ -38,8 +38,15 @@ export function TemplateGallery({ brand }: { brand: EditorBrand | null }) {
 
   return (
     <div className="grid gap-8 px-6 py-8 sm:grid-cols-2 lg:grid-cols-3 md:px-8">
-      {TEMPLATES.map((template) => (
-        <div key={template.slug} className="space-y-3">
+      {TEMPLATES.map((template, index) => (
+        <div
+          key={template.slug}
+          className="animate-in fade-in-0 slide-in-from-bottom-2 fill-mode-backwards duration-500 ease-(--ease-out) space-y-3"
+          // Capped rather than index * delay unbounded: fourteen cards should
+          // still finish revealing quickly, not queue up half a second of
+          // pure waiting for the last row.
+          style={{ animationDelay: `${Math.min(index, 10) * 40}ms` }}
+        >
           <div className="rounded-xl border border-border p-3">
             <SlidePreview
               maxWidth={300}

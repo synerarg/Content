@@ -35,7 +35,20 @@ export function Elapsed({
 
   return (
     <p className="text-xs tabular-nums text-muted-foreground">
-      {Math.round(elapsed / 1000)}s{expected ? ` · ${expected}` : null}
+      {/*
+        The ticking number must never sit in the live region: it changes every
+        500ms, and a screen reader would read out each one. This static
+        sentence is announced exactly once — the moment this element first
+        mounts — because its text never changes again after that.
+      */}
+      <span aria-live="polite" className="sr-only">
+        {expected
+          ? `Está tardando más de lo esperado — ${expected}.`
+          : "Está tardando más de lo esperado."}
+      </span>
+      <span aria-hidden="true">
+        {Math.round(elapsed / 1000)}s{expected ? ` · ${expected}` : null}
+      </span>
     </p>
   );
 }

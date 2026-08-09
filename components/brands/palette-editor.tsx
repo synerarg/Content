@@ -42,7 +42,7 @@ function ContrastRow({
         <span className="truncate text-xs text-muted-foreground">{label}</span>
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        <span className="font-mono text-xs tabular-nums">
+        <span className="w-14 text-right font-mono text-xs tabular-nums">
           {ratio.toFixed(2)}:1
         </span>
         <span
@@ -126,7 +126,11 @@ export function PaletteEditor({
                 aria-label="Valor hex"
                 value={token.value}
                 onChange={(event) => update(index, { value: event.target.value })}
-                placeholder="#84E9FF"
+                // Deliberately NOT this agency's own cyan (#84E9FF) — the same
+                // trap brand-form.tsx's `name` field has a comment warning
+                // about. A placeholder that IS a real, plausible brand colour
+                // is a placeholder someone eventually ships by accident.
+                placeholder="#6B7280"
                 className="w-32 font-mono text-sm uppercase"
               />
 
@@ -157,7 +161,7 @@ export function PaletteEditor({
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
       {activePairs.length > 0 ? (
-        <div className="rounded-lg border border-border bg-card p-3">
+        <div className="space-y-1 border-t border-border pt-3">
           <Label className="mb-1 block text-xs uppercase tracking-wider text-muted-foreground">
             Contraste
           </Label>

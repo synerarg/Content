@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ImageUp, X } from "lucide-react";
+import { ImageUp, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { publicAssetUrl, uploadViaSignedUrl } from "@/lib/storage";
 import { Button } from "@/components/ui/button";
@@ -65,6 +65,11 @@ export function LogoUpload({
         <div className="flex items-center gap-2">
           <Button asChild variant="outline" size="sm" disabled={uploading}>
             <label className="cursor-pointer">
+              {uploading ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <ImageUp className="size-4" />
+              )}
               {uploading ? "Subiendo…" : "Subir logo"}
               <input
                 type="file"

@@ -917,7 +917,15 @@ export function BatchDetail({
         onConfirm={handleDelete}
       />
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4">
+      {/*
+        The batch-level toolbar: actions, the background queue, the schedule
+        panel. Deliberately NOT a card — it used to be three stacked
+        rounded-xl/border/bg-card boxes that outweighed the pieces below them,
+        which is backwards on a screen people stare at all day. One hairline
+        at the bottom is enough separation; the weight belongs to the content.
+      */}
+      <div className="space-y-4 border-b border-border pb-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="text-sm">
           <span className="font-medium">{posts.length} piezas</span>
           <span className="text-muted-foreground"> · {totalSlides} placas</span>
@@ -1012,13 +1020,13 @@ export function BatchDetail({
       {/* The tooltip alone is not enough: a disabled button does not fire hover
           on touch, and this is the one place a phone user gets stuck. */}
       {exportBlockedReason && !exporting ? (
-        <p className="-mt-4 text-xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           No se puede exportar todavía: {exportBlockedReason}
         </p>
       ) : null}
 
       {(exporting || savingRenders) && exportProgress.total > 0 ? (
-        <div className="-mt-4 space-y-1.5">
+        <div className="space-y-1.5">
           <div
             className="h-1 overflow-hidden rounded-full bg-muted"
             role="progressbar"
@@ -1107,9 +1115,13 @@ export function BatchDetail({
           )
         }
       />
+      </div>
 
       {posts.map((post, postIndex) => (
-        <section key={post.id} className="space-y-4">
+        <section
+          key={post.id}
+          className="space-y-4 rounded-xl border border-border bg-card p-5"
+        >
           <div className="flex flex-wrap items-center gap-3">
             <span className="rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground">
               {String(postIndex + 1).padStart(2, "0")} ·{" "}
@@ -1125,7 +1137,7 @@ export function BatchDetail({
               can move without redoing the other four.
             */}
             <span className="flex items-center gap-1.5">
-              <input
+              <Input
                 type="date"
                 aria-label={`Fecha de la pieza ${postIndex + 1}`}
                 value={post.scheduledOn ?? ""}
@@ -1136,9 +1148,9 @@ export function BatchDetail({
                     post.scheduledTime ?? DEFAULT_TIME,
                   )
                 }
-                className="h-8 rounded-md border border-border bg-transparent px-2 text-xs"
+                className="h-8 w-auto"
               />
-              <input
+              <Input
                 type="time"
                 aria-label={`Hora de la pieza ${postIndex + 1}`}
                 value={timeInputValue(post.scheduledTime)}
@@ -1146,7 +1158,7 @@ export function BatchDetail({
                 onChange={(event) =>
                   changeSchedule(post.id, post.scheduledOn, event.target.value || null)
                 }
-                className="h-8 rounded-md border border-border bg-transparent px-2 text-xs tabular-nums disabled:opacity-40"
+                className="h-8 w-auto tabular-nums"
               />
             </span>
 
@@ -1169,219 +1181,218 @@ export function BatchDetail({
             </Button>
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
-            <div className="space-y-4">
-              {post.slides.map((slide) => {
-                const template = getTemplate(slide.templateSlug);
-                if (!template || !brandTokens) return null;
+          <div className="space-y-6">
+            {post.slides.map((slide, slideIndex) => {
+              const template = getTemplate(slide.templateSlug);
+              if (!template) return null;
 
-                const state = queue.states[slide.id] ?? {
-                  status: slide.backgroundStatus,
-                  error: slide.backgroundError,
-                  attempts: slide.backgroundAttempts,
-                };
-                const busy =
-                  state.status === "running" || state.status === "queued";
+              const merged = { ...emptySlots(template), ...slide.slots };
+              const expanded = expandedSlides.has(slide.id);
+              const state = queue.states[slide.id] ?? {
+                status: slide.backgroundStatus,
+                error: slide.backgroundError,
+                attempts: slide.backgroundAttempts,
+              };
+              const busy =
+                state.status === "running" || state.status === "queued";
 
-                return (
-                  <div key={slide.id} className="space-y-2">
-                    <div className="rounded-xl border border-border p-2">
-                      <SlidePreview
-                        maxWidth={296}
-                        template={template}
-                        slots={{ ...emptySlots(template), ...slide.slots }}
-                        format={slide.format}
-                        brand={brandTokens}
-                        backgroundUrl={backgrounds[slide.id] ?? null}
-                        product={productFor(slide)}
-                        fontCss={fontCss}
-                      />
-                    </div>
-
-                    {/* A typographic template has no background to generate,
-                        so it gets no status chip and no generate button —
-                        controls for something that will never happen. */}
-                    {templateUsesBackground(slide.templateSlug) ? (
-                      <div className="flex items-center justify-between gap-2">
-                        <SlideStatusChip state={state} />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => regenerateOne(slide)}
-                          disabled={queue.running || busy}
+              return (
+                <div
+                  key={slide.id}
+                  className="grid gap-4 lg:grid-cols-[320px_1fr] lg:items-start"
+                >
+                  {/* Preview plus everything that reports on its state. One
+                      grid item per slide instead of two independently-looping
+                      columns — a slide's own preview and its own fields can no
+                      longer drift out of alignment when one of them grows
+                      taller than the other. */}
+                  <div className="space-y-2">
+                    {brandTokens ? (
+                      <>
+                        <div
+                          key={backgrounds[slide.id] ? "bg" : "empty"}
+                          className="animate-in fade-in-0 duration-500 rounded-xl border border-border p-2"
                         >
-                          <RefreshCw className="size-4" />
-                          {state.status === "ready" ? "Regenerar" : "Generar"}
-                        </Button>
-                      </div>
-                    ) : (
-                      <p className="px-2 text-[11px] text-muted-foreground">
-                        Sin fondo generado — esta plantilla es sólo tipografía.
-                      </p>
-                    )}
-
-                    {/*
-                      The product is chosen when the batch is created, so this is
-                      a correction rather than a setup step — but it has to be
-                      here, because "wrong product on one piece" is otherwise
-                      only fixable by regenerating the whole batch.
-                    */}
-                    {templateUsesProduct(slide.templateSlug) ? (
-                      brand.products.length === 0 ? (
-                        <p className="px-2 text-[11px] text-muted-foreground">
-                          Esta plantilla necesita un producto y la marca no tiene
-                          ninguno cargado.
-                        </p>
-                      ) : (
-                        <Select
-                          value={slide.productId ?? ""}
-                          onValueChange={(next) => changeProduct(slide.id, next)}
-                        >
-                          <SelectTrigger className="h-8 text-xs">
-                            <SelectValue placeholder="Elegí un producto" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {brand.products.map((item) => (
-                              <SelectItem key={item.id} value={item.id}>
-                                {item.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )
-                    ) : null}
-
-                    {/*
-                      Progressive disclosure: the scene brief and the seed are
-                      real controls, but nobody needs them to review a batch.
-                      Collapsed by default, and the defaults work without ever
-                      opening this.
-                    */}
-                    <details className="group">
-                      <summary className="cursor-pointer list-none px-2 text-[11px] text-muted-foreground marker:content-none hover:text-foreground">
-                        Avanzado
-                      </summary>
-                      <dl className="mt-2 space-y-2 rounded-lg border border-border p-2 text-[11px]">
-                        <div>
-                          <dt className="text-muted-foreground">Escena pedida</dt>
-                          <dd className="break-words">
-                            {slide.backgroundBrief || "—"}
-                          </dd>
+                          <SlidePreview
+                            maxWidth={296}
+                            template={template}
+                            slots={{ ...emptySlots(template), ...slide.slots }}
+                            format={slide.format}
+                            brand={brandTokens}
+                            backgroundUrl={backgrounds[slide.id] ?? null}
+                            product={productFor(slide)}
+                            fontCss={fontCss}
+                          />
                         </div>
-                        <div>
-                          <dt className="text-muted-foreground">Plantilla</dt>
-                          <dd className="font-mono">{slide.templateSlug}</dd>
-                        </div>
-                        {state.attempts > 0 ? (
-                          <div>
-                            <dt className="text-muted-foreground">Intentos</dt>
-                            <dd className="tabular-nums">{state.attempts}</dd>
+
+                        {/* A typographic template has no background to generate,
+                            so it gets no status chip and no generate button —
+                            controls for something that will never happen. */}
+                        {templateUsesBackground(slide.templateSlug) ? (
+                          <div className="flex items-center justify-between gap-2">
+                            <SlideStatusChip state={state} />
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => regenerateOne(slide)}
+                              disabled={queue.running || busy}
+                            >
+                              <RefreshCw className="size-4" />
+                              {state.status === "ready" ? "Regenerar" : "Generar"}
+                            </Button>
+                          </div>
+                        ) : (
+                          <p className="px-2 text-[11px] text-muted-foreground">
+                            Sin fondo generado — esta plantilla es sólo tipografía.
+                          </p>
+                        )}
+
+                        {/*
+                          The product is chosen when the batch is created, so this is
+                          a correction rather than a setup step — but it has to be
+                          here, because "wrong product on one piece" is otherwise
+                          only fixable by regenerating the whole batch.
+                        */}
+                        {templateUsesProduct(slide.templateSlug) ? (
+                          brand.products.length === 0 ? (
+                            <p className="px-2 text-[11px] text-muted-foreground">
+                              Esta plantilla necesita un producto y la marca no tiene
+                              ninguno cargado.
+                            </p>
+                          ) : (
+                            <Select
+                              value={slide.productId ?? ""}
+                              onValueChange={(next) => changeProduct(slide.id, next)}
+                            >
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue placeholder="Elegí un producto" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {brand.products.map((item) => (
+                                  <SelectItem key={item.id} value={item.id}>
+                                    {item.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )
+                        ) : null}
+
+                        {/*
+                          Status stack: legibility, saved-render state, and a
+                          generation failure. These stay in plain sight — a
+                          "Detalles" disclosure is for metadata nobody needs to
+                          act on, not for the things that say whether this
+                          placa is actually finished.
+                        */}
+                        {legibility[slide.id] ? (
+                          <div className="space-y-1.5 px-0.5">
+                            <LegibilityChip report={legibility[slide.id]} />
+                            {!legibility[slide.id].ok ? (
+                              <LegibilityDetails report={legibility[slide.id]} />
+                            ) : null}
                           </div>
                         ) : null}
-                      </dl>
-                    </details>
 
-                    {state.status === "ready" ? (
-                      <BackgroundHistory
-                        slideId={slide.id}
-                        currentPath={slide.backgroundPath}
-                        onRestored={(path, blobUrl) => {
-                          const previous = objectUrls.current.get(slide.id);
-                          if (previous && previous !== blobUrl) {
-                            URL.revokeObjectURL(previous);
-                          }
-                          objectUrls.current.set(slide.id, blobUrl);
-                          setBackgrounds((current) => ({
-                            ...current,
-                            [slide.id]: blobUrl,
-                          }));
-                          setPosts((current) =>
-                            current.map((p) => ({
-                              ...p,
-                              slides: p.slides.map((s) =>
-                                s.id === slide.id
-                                  ? { ...s, backgroundPath: path }
-                                  : s,
-                              ),
-                            })),
-                          );
-                        }}
-                      />
-                    ) : null}
-
-                    {/*
-                      Only rendered once the slide has actually been measured.
-                      An always-present "sin revisar" chip on every slide is
-                      noise that trains people to stop reading the row.
-                    */}
-                    {legibility[slide.id] ? (
-                      <div className="space-y-1.5 px-0.5">
-                        <LegibilityChip report={legibility[slide.id]} />
-                        {!legibility[slide.id].ok ? (
-                          <LegibilityDetails report={legibility[slide.id]} />
+                        {renderState(slide) !== "none" ? (
+                          <p
+                            className={cn(
+                              "flex items-center gap-1.5 px-0.5 text-[11px]",
+                              renderState(slide) === "stale"
+                                ? "text-destructive"
+                                : "text-muted-foreground",
+                            )}
+                          >
+                            {renderState(slide) === "stale" ? (
+                              <>
+                                <TriangleAlert className="size-3.5 shrink-0" />
+                                PNG guardado desactualizado — la placa cambió desde
+                                entonces. Volvé a guardar.
+                              </>
+                            ) : (
+                              <>
+                                <CloudCheck className="size-3.5 shrink-0" />
+                                PNG guardado{" "}
+                                {slide.renderedAt
+                                  ? `el ${formatDay(slide.renderedAt.slice(0, 10))}`
+                                  : ""}
+                              </>
+                            )}
+                          </p>
                         ) : null}
-                      </div>
-                    ) : null}
 
-                    {/*
-                      Only shown once a render exists. "Desactualizada" is the
-                      state worth naming: a saved PNG that no longer matches the
-                      placa is a file something could publish, and nothing about
-                      the file itself would say it is wrong.
-                    */}
-                    {renderState(slide) !== "none" ? (
-                      <p
-                        className={cn(
-                          "flex items-center gap-1.5 px-0.5 text-[11px]",
-                          renderState(slide) === "stale"
-                            ? "text-destructive"
-                            : "text-muted-foreground",
-                        )}
-                      >
-                        {renderState(slide) === "stale" ? (
-                          <>
-                            <TriangleAlert className="size-3.5 shrink-0" />
-                            PNG guardado desactualizado — la placa cambió desde
-                            entonces. Volvé a guardar.
-                          </>
-                        ) : (
-                          <>
-                            <CloudCheck className="size-3.5 shrink-0" />
-                            PNG guardado{" "}
-                            {slide.renderedAt
-                              ? `el ${formatDay(slide.renderedAt.slice(0, 10))}`
-                              : ""}
-                          </>
-                        )}
-                      </p>
-                    ) : null}
+                        {state.status === "failed" && state.error ? (
+                          <p className="break-words rounded-md border border-destructive/20 px-2 py-1.5 text-[11px] text-destructive">
+                            {state.error}
+                          </p>
+                        ) : null}
 
-                    {/*
-                      The failure reason stays on screen until the slide is
-                      retried. "Exhausted balance" and a filtered prompt need
-                      completely different responses, and a toast that already
-                      disappeared cannot tell you which one happened.
-                    */}
-                    {state.status === "failed" && state.error ? (
-                      <p className="break-words rounded-md border border-destructive/20 px-2 py-1.5 text-[11px] text-destructive">
-                        {state.error}
-                      </p>
+                        {/*
+                          Everything secondary in one disclosure instead of two:
+                          the scene brief and template slug nobody needs to
+                          review a batch, plus older backgrounds — merged here
+                          because both were already opt-in on their own.
+                        */}
+                        <details className="group">
+                          <summary className="cursor-pointer list-none px-2 text-[11px] text-muted-foreground marker:content-none hover:text-foreground">
+                            Detalles
+                          </summary>
+                          <div className="mt-2 space-y-3 rounded-lg border border-border p-2">
+                            <dl className="space-y-2 text-[11px]">
+                              <div>
+                                <dt className="text-muted-foreground">Escena pedida</dt>
+                                <dd className="break-words">
+                                  {slide.backgroundBrief || "—"}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt className="text-muted-foreground">Plantilla</dt>
+                                <dd className="font-mono">{slide.templateSlug}</dd>
+                              </div>
+                              {state.attempts > 0 ? (
+                                <div>
+                                  <dt className="text-muted-foreground">Intentos</dt>
+                                  <dd className="tabular-nums">{state.attempts}</dd>
+                                </div>
+                              ) : null}
+                            </dl>
+
+                            {state.status === "ready" ? (
+                              <BackgroundHistory
+                                slideId={slide.id}
+                                currentPath={slide.backgroundPath}
+                                onRestored={(path, blobUrl) => {
+                                  const previous = objectUrls.current.get(slide.id);
+                                  if (previous && previous !== blobUrl) {
+                                    URL.revokeObjectURL(previous);
+                                  }
+                                  objectUrls.current.set(slide.id, blobUrl);
+                                  setBackgrounds((current) => ({
+                                    ...current,
+                                    [slide.id]: blobUrl,
+                                  }));
+                                  setPosts((current) =>
+                                    current.map((p) => ({
+                                      ...p,
+                                      slides: p.slides.map((s) =>
+                                        s.id === slide.id
+                                          ? { ...s, backgroundPath: path }
+                                          : s,
+                                      ),
+                                    })),
+                                  );
+                                }}
+                              />
+                            ) : null}
+                          </div>
+                        </details>
+                      </>
                     ) : null}
                   </div>
-                );
-              })}
-            </div>
 
-            <div className="space-y-6">
-              {post.slides.map((slide, slideIndex) => {
-                const template = getTemplate(slide.templateSlug);
-                if (!template) return null;
-                const merged = { ...emptySlots(template), ...slide.slots };
-
-                const expanded = expandedSlides.has(slide.id);
-
-                return (
-                  <div key={slide.id} className="space-y-3">
+                  {/* This slide's editable text — independent of brandTokens,
+                      so typing is never blocked on fonts still loading. */}
+                  <div className="space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="text-xs uppercase tracking-wider text-muted-foreground">
                         Placa {slideIndex + 1} · {template.name} ·{" "}
@@ -1440,53 +1451,60 @@ export function BatchDetail({
                         !expanded && "hidden lg:block",
                       )}
                     >
-                      {Object.keys(emptySlots(template)).map((key) => (
-                        <div key={key} className="space-y-1.5">
-                          <Label
-                            htmlFor={`${slide.id}-${key}`}
-                            className="text-xs"
-                          >
-                            {slotLabel(template, key)}
-                            {isSlotRequired(template, key) ? null : (
-                              <span className="ml-1.5 font-normal text-muted-foreground">
-                                opcional
-                              </span>
+                      {Object.keys(emptySlots(template)).map((key) => {
+                        const required = isSlotRequired(template, key);
+                        const empty = !merged[key]?.trim();
+                        return (
+                          <div key={key} className="space-y-1.5">
+                            <Label
+                              htmlFor={`${slide.id}-${key}`}
+                              className="text-xs"
+                            >
+                              {slotLabel(template, key)}
+                              {required ? null : (
+                                <span className="ml-1.5 font-normal text-muted-foreground">
+                                  opcional
+                                </span>
+                              )}
+                            </Label>
+                            {LONG_SLOTS.has(key) ? (
+                              <Textarea
+                                id={`${slide.id}-${key}`}
+                                rows={2}
+                                aria-invalid={required && empty}
+                                value={merged[key] ?? ""}
+                                onChange={(event) =>
+                                  patchSlide(slide.id, {
+                                    ...merged,
+                                    [key]: event.target.value,
+                                  })
+                                }
+                                onBlur={() => autosave.flush(`slide:${slide.id}`, slotSaver(slide.id, merged))}
+                              />
+                            ) : (
+                              <Input
+                                id={`${slide.id}-${key}`}
+                                aria-invalid={required && empty}
+                                value={merged[key] ?? ""}
+                                onChange={(event) =>
+                                  patchSlide(slide.id, {
+                                    ...merged,
+                                    [key]: event.target.value,
+                                  })
+                                }
+                                onBlur={() => autosave.flush(`slide:${slide.id}`, slotSaver(slide.id, merged))}
+                              />
                             )}
-                          </Label>
-                          {LONG_SLOTS.has(key) ? (
-                            <Textarea
-                              id={`${slide.id}-${key}`}
-                              rows={2}
-                              value={merged[key] ?? ""}
-                              onChange={(event) =>
-                                patchSlide(slide.id, {
-                                  ...merged,
-                                  [key]: event.target.value,
-                                })
-                              }
-                              onBlur={() => autosave.flush(`slide:${slide.id}`, slotSaver(slide.id, merged))}
-                            />
-                          ) : (
-                            <Input
-                              id={`${slide.id}-${key}`}
-                              value={merged[key] ?? ""}
-                              onChange={(event) =>
-                                patchSlide(slide.id, {
-                                  ...merged,
-                                  [key]: event.target.value,
-                                })
-                              }
-                              onBlur={() => autosave.flush(`slide:${slide.id}`, slotSaver(slide.id, merged))}
-                            />
-                          )}
-                        </div>
-                      ))}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
-                );
-              })}
+                </div>
+              );
+            })}
 
-              <div className="space-y-3 border-t border-border pt-4">
+            <div className="space-y-3 border-t border-border pt-4">
                 <div className="flex items-center justify-between">
                   <Label htmlFor={`caption-${post.id}`} className="text-xs">
                     Caption
@@ -1571,7 +1589,6 @@ export function BatchDetail({
                 </div>
               </div>
             </div>
-          </div>
         </section>
       ))}
 

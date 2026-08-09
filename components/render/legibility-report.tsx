@@ -3,6 +3,7 @@
 import { Eye, TriangleAlert } from "lucide-react";
 import type { LegibilityReport } from "@/lib/render/legibility";
 import { cn } from "@/lib/utils";
+import { StatusChip } from "@/components/ui/status-chip";
 
 /*
   A WARNING, never a block.
@@ -34,29 +35,20 @@ export function LegibilityChip({
   const failing = report.findings.filter((finding) => !finding.ok).length;
 
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] tabular-nums",
-        report.ok
-          ? "border-[color-mix(in_oklch,var(--synera-accent)_28%,transparent)] text-[var(--synera-accent)]"
-          : "border-destructive/30 text-destructive",
-        className,
-      )}
+    <StatusChip
+      tone={report.ok ? "accent" : "destructive"}
+      icon={report.ok ? Eye : TriangleAlert}
+      className={className}
       title={
         report.worst
           ? `Peor caso: "${report.worst.label}" con ${report.worst.ratio}:1 (necesita ${report.worst.required}:1)`
           : undefined
       }
     >
-      {report.ok ? (
-        <Eye className="size-3.5" />
-      ) : (
-        <TriangleAlert className="size-3.5" />
-      )}
       {report.ok
         ? `Legible · ${report.worst?.ratio ?? "?"}:1`
         : `${failing} texto${failing === 1 ? "" : "s"} con poco contraste`}
-    </span>
+    </StatusChip>
   );
 }
 

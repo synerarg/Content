@@ -9,10 +9,14 @@ export function PageHeader({
 }) {
   return (
     <header className="flex flex-wrap items-start justify-between gap-4 border-b border-border px-6 py-5 md:px-8">
-      <div className="space-y-1">
-        <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
+      <div className="min-w-0 space-y-1">
+        <h1 className="truncate text-lg font-semibold tracking-tight">
+          {title}
+        </h1>
         {description ? (
-          <p className="text-sm text-muted-foreground">{description}</p>
+          <p className="truncate text-sm text-muted-foreground">
+            {description}
+          </p>
         ) : null}
       </div>
       {action}

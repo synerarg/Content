@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { AlertDialog as AlertDialogPrimitive } from "radix-ui";
+import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -26,9 +27,11 @@ function ConfirmDialogOverlay({
   return (
     <AlertDialogPrimitive.Overlay
       className={cn(
-        "fixed inset-0 z-50 bg-black/70 backdrop-blur-sm",
-        "data-[state=open]:animate-in data-[state=closed]:animate-out",
-        "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
+        // Same overlay language as Dialog — a destructive confirm is a
+        // heavier decision, not a heavier layer of chrome.
+        "fixed inset-0 z-50 bg-black/10 duration-200 supports-backdrop-filter:backdrop-blur-xs",
+        "data-open:animate-in data-closed:animate-out",
+        "data-open:fade-in-0 data-closed:fade-out-0",
         className,
       )}
       {...props}
@@ -67,13 +70,14 @@ export function ConfirmDialog({
         <AlertDialogPrimitive.Content
           className={cn(
             "fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2",
-            "rounded-xl border border-border bg-popover p-6 shadow-2xl",
-            "data-[state=open]:animate-in data-[state=closed]:animate-out",
-            "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
-            "data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95",
+            // ring, not shadow — same rule card.tsx and Dialog already follow.
+            "rounded-xl bg-popover p-6 text-sm ring-1 ring-foreground/10 duration-200",
+            "data-open:animate-in data-closed:animate-out",
+            "data-open:fade-in-0 data-closed:fade-out-0",
+            "data-open:zoom-in-95 data-closed:zoom-out-95",
           )}
         >
-          <AlertDialogPrimitive.Title className="text-base font-medium">
+          <AlertDialogPrimitive.Title className="text-base font-medium text-balance">
             {title}
           </AlertDialogPrimitive.Title>
           <AlertDialogPrimitive.Description className="mt-2 text-sm text-muted-foreground">
@@ -105,6 +109,7 @@ export function ConfirmDialog({
                   onConfirm();
                 }}
               >
+                {pending ? <Loader2 className="size-4 animate-spin" /> : null}
                 {confirmLabel}
               </Button>
             </AlertDialogPrimitive.Action>

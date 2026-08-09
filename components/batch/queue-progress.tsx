@@ -1,8 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CircleAlert, ImageIcon, Loader2, Pause, Play, Timer } from "lucide-react";
+import {
+  Check,
+  CircleAlert,
+  ImageIcon,
+  Loader2,
+  Pause,
+  Play,
+  Timer,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { StatusChip, type ChipTone } from "@/components/ui/status-chip";
 import type {
   BackgroundStatus,
   SlideQueueState,
@@ -79,7 +88,7 @@ export function QueueProgress({
   const percent = total === 0 ? 0 : Math.round((done / total) * 100);
 
   return (
-    <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+    <div className="space-y-3 border-t border-border pt-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0 space-y-1">
           <p className="text-sm">
@@ -172,27 +181,33 @@ const STATUS_LABEL: Record<BackgroundStatus, string> = {
   failed: "Error",
 };
 
-const STATUS_TONE: Record<BackgroundStatus, string> = {
-  pending: "border-border text-muted-foreground",
-  queued: "border-border text-muted-foreground",
-  running:
-    "border-[color-mix(in_oklch,var(--synera-accent)_35%,transparent)] text-[var(--synera-accent)]",
-  ready: "border-border text-muted-foreground",
-  failed: "border-destructive/30 text-destructive",
+const STATUS_TONE: Record<BackgroundStatus, ChipTone> = {
+  pending: "neutral",
+  queued: "neutral",
+  running: "accent",
+  // Was indistinguishable from "pending"/"queued" — same neutral tone, no
+  // icon, on a screen where "did this finish" is the first thing to check.
+  ready: "accent",
+  failed: "destructive",
 };
 
 /** Per-slide state chip, shown under each preview. */
 export function SlideStatusChip({ state }: { state: SlideQueueState }) {
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] ${STATUS_TONE[state.status]}`}
+    <StatusChip
+      tone={STATUS_TONE[state.status]}
+      icon={
+        state.status === "running"
+          ? Loader2
+          : state.status === "ready"
+            ? Check
+            : state.status === "failed"
+              ? CircleAlert
+              : undefined
+      }
+      spin={state.status === "running"}
     >
-      {state.status === "running" ? (
-        <Loader2 className="size-3 animate-spin" />
-      ) : state.status === "failed" ? (
-        <CircleAlert className="size-3" />
-      ) : null}
       {STATUS_LABEL[state.status]}
-    </span>
+    </StatusChip>
   );
 }

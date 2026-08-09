@@ -43,7 +43,7 @@ function RoleFields({
   );
 
   return (
-    <div className="space-y-3 rounded-lg border border-border bg-card p-4">
+    <div className="space-y-3">
       <div>
         <Label className="text-sm">{label}</Label>
         <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>
@@ -111,7 +111,7 @@ export function TypographyPicker({
   onChange: (next: { display: TypographyRole; body: TypographyRole }) => void;
 }) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <RoleFields
         label="Display"
         hint="Titulares sobre la imagen. Tiene que aguantar tamaños grandes."

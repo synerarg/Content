@@ -16,7 +16,12 @@ import { formatDay } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { HelpTip } from "@/components/ui/help-tip";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+
+/** Past this many dates, the preview names the first few and counts the rest
+ * instead of joining every date into one unbounded line. */
+const PREVIEW_DATES_SHOWN = 5;
 
 /**
  * Spread a whole batch across the calendar.
@@ -114,7 +119,7 @@ export function SchedulePanel({
   }
 
   return (
-    <section className="space-y-4 rounded-xl border border-border bg-card p-5">
+    <section className="space-y-4 border-t border-border pt-4">
       <div className="flex flex-wrap items-center gap-2">
         <CalendarRange className="size-4 text-[var(--synera-accent)]" />
         <h2 className="text-sm font-semibold">Programar el lote</h2>
@@ -130,12 +135,12 @@ export function SchedulePanel({
           <Label htmlFor="schedule-start" className="text-xs">
             Desde
           </Label>
-          <input
+          <Input
             id="schedule-start"
             type="date"
             value={startOn}
             onChange={(event) => setStartOn(event.target.value)}
-            className="h-9 rounded-md border border-border bg-transparent px-2 text-sm"
+            className="h-9 w-auto"
           />
         </div>
 
@@ -148,12 +153,12 @@ export function SchedulePanel({
               huso.
             </HelpTip>
           </Label>
-          <input
+          <Input
             id="schedule-time"
             type="time"
             value={time}
             onChange={(event) => setTime(event.target.value)}
-            className="h-9 rounded-md border border-border bg-transparent px-2 text-sm tabular-nums"
+            className="h-9 w-auto tabular-nums"
           />
         </div>
 
@@ -198,7 +203,13 @@ export function SchedulePanel({
         <p className="text-xs text-muted-foreground">
           Queda:{" "}
           <span className="text-foreground">
-            {preview.map((day) => formatDay(day)).join(" · ")}
+            {preview
+              .slice(0, PREVIEW_DATES_SHOWN)
+              .map((day) => formatDay(day))
+              .join(" · ")}
+            {preview.length > PREVIEW_DATES_SHOWN
+              ? ` y ${preview.length - PREVIEW_DATES_SHOWN} más`
+              : ""}
           </span>{" "}
           a las {time || DEFAULT_TIME}.
         </p>

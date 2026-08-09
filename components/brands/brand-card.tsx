@@ -167,7 +167,7 @@ export function BrandCard({ brand }: { brand: BrandCardData }) {
         </div>
 
         <div className="space-y-1">
-          <h3 className="font-medium leading-none">{brand.name}</h3>
+          <h3 className="truncate font-medium leading-none">{brand.name}</h3>
           {brand.tagline ? (
             <p className="line-clamp-1 text-sm text-muted-foreground">
               {brand.tagline}
