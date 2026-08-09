@@ -1026,8 +1026,8 @@ not worked around.
 
 ### Skills
 
-`.claude/skills/` — two, both encoding conventions this file already documents
-in prose and that were being re-derived from it every session.
+**Ours**, encoding conventions this file already documents in prose and that
+were being re-derived from it every session:
 
 - **`verificar`** — writing a `verify:*` (offline assertions) or `probe:*` (live,
   costs money) script: how to choose, the harness to copy, the header convention
@@ -1040,9 +1040,36 @@ in prose and that were being re-derived from it every session.
   family, `fitTextSize` on free-text slots, branch on `format`), and the
   invariants `verify:products` enforces.
 
-Nothing else is installed. Of the official marketplace only `frontend-design`
-and `skill-creator` are relevant here; the rest is Discord, iMessage, plugin and
-MCP-server development.
+**Third-party design skills**, installed 2026-08-07 from a list the account
+owner supplied. `frontend-design` (Anthropic), `web-design-guidelines`
+(Vercel), `design-taste-frontend` (leonxlnx), and nine from
+`emilkowalski/skill`: `emil-design-eng`, `animate`, `apple-design`,
+`animation-vocabulary`, `find-animation-opportunities`, `improve-animations`,
+`review-animations`, `prototype`, `pick-ui-library`.
+
+**The line drawn, and it is worth keeping:** only markdown was installed. Four
+of the requested sources ship executable payloads or need external tooling, and
+those are the owner's call to run, not something to pull into the repo
+unilaterally:
+
+| Not installed | Why |
+|---|---|
+| `pbakaus/impeccable` | 148 files, 3 MB, incl. a 489 KB `live-browser.js` and a 358 KB detector — and the skill's `allowed-tools` runs them. `npx impeccable install` |
+| `nextlevelbuilder/ui-ux-pro-max` | 230 files, 7.9 MB, incl. TTF fonts and a 726 KB CSV; the SKILL.md is useless without its `data/` and `scripts/` |
+| `seo-audit-skill` | needs the `seomator` CLI, and this app is authenticated-only — SEO has no surface here |
+| `AccessLint/skills` | needs its own MCP server; the skill's `allowed-tools` are `mcp__plugin_accesslint_*`, absent here |
+| `lackeyjb/playwright-skill` | needs Playwright; the in-app browser tools already cover this ground |
+| `delphi-ai/animate-skill` | declares `name: animate`, colliding with Emil's — and says outright it is based on the same course |
+| `claude-mem`, `web-search-mcp` | MCP servers, not skills. Memory is already file-based here and web search is built in |
+
+**They overlap, and that is a real cost.** `frontend-design`,
+`design-taste-frontend`, `emil-design-eng` and (if installed) `impeccable` and
+`ui-ux-pro-max` are all "make the UI good" with different opinions; every one
+of their descriptions is weighed on every design request. Suggested primary:
+`emil-design-eng` for taste, `web-design-guidelines` for review, the animation
+set for motion. `design-taste-frontend` is 87 KB and aimed at landing pages and
+portfolios — this app is an authenticated internal tool, so it is the first one
+to drop if the set feels noisy.
 
 ### A finished placa that exists outside the browser (step 1 of publishing)
 
