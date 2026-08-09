@@ -511,6 +511,9 @@ export type Database = {
           position: number
           post_id: string
           product_id: string | null
+          render_fingerprint: string | null
+          render_path: string | null
+          rendered_at: string | null
           slots: Json
           template_slug: string
           updated_at: string
@@ -529,6 +532,9 @@ export type Database = {
           position?: number
           post_id: string
           product_id?: string | null
+          render_fingerprint?: string | null
+          render_path?: string | null
+          rendered_at?: string | null
           slots?: Json
           template_slug: string
           updated_at?: string
@@ -547,6 +553,9 @@ export type Database = {
           position?: number
           post_id?: string
           product_id?: string | null
+          render_fingerprint?: string | null
+          render_path?: string | null
+          rendered_at?: string | null
           slots?: Json
           template_slug?: string
           updated_at?: string

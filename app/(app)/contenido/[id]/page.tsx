@@ -49,7 +49,8 @@ export default async function BatchPage({
                brand_products (id, name, description, image_path, has_transparency)),
        posts (id, position, type, caption, hashtags, cta, scheduled_on, scheduled_time,
               slides (id, position, template_slug, format, slots, product_id, background_path, generation_params,
-                      background_status, background_error, background_attempts))`,
+                      background_status, background_error, background_attempts,
+                      render_path, rendered_at, render_fingerprint))`,
     )
     .eq("id", id)
     .is("deleted_at", null)
@@ -147,6 +148,12 @@ export default async function BatchPage({
           backgroundStatus: slide.background_status,
           backgroundError: slide.background_error,
           backgroundAttempts: slide.background_attempts,
+          // Not signed here. A render URL is minted on demand and lives an
+          // hour; signing every slide's on every page load would burn the TTL
+          // on links nobody opens, and most of these are never fetched.
+          renderPath: slide.render_path,
+          renderedAt: slide.rendered_at,
+          renderFingerprint: slide.render_fingerprint,
         })),
     }));
 

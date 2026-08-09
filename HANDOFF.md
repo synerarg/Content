@@ -285,6 +285,9 @@ template automatically teaches the prompts its slot names and character limits.
 | Scene reference does not tint the set | **PASS after a fix the probe forced** — prompt `.3` returned a kitchen painted the bottle's own olive green. `.4` takes the light and refuses the colour; same reference, green gone |
 | Tab completion, **measured in the browser** | **PASS, 2026-08-07** — empty field + Tab fills it and keeps focus; second Tab leaves; Shift+Tab never completes; the value SURVIVES a react-hook-form re-render, which is what proves the native-setter write reached React. Ghost overlay: box delta 0px on all four sides, identical font/line-height/padding, and it re-wraps with the field at 261px wide |
 | Sticky shell and section labels, **measured** | **PASS** — at `scrollY 1565` the aside sits at `top: 0` with the nav visible, and the section label in play sits at `top: 24` (its `top-6`). Before, the aside stretched to document height and left an empty column |
+| Render fingerprint, 30 asserts (`npm run verify:render`) | PASS — every field of `FingerprintInput` walked one at a time, plus a check that the walk itself covers the type, so a field added later without being hashed fails here. Key-order independence, the absent-vs-empty slot decision, and 2000 realistic variations with no collision. **Verified to be a real test:** dropping `backgroundPath` from the payload fails exactly the two assertions about it, with the identical hashes printed as the detail |
+| `renders` bucket denies anonymous reads (`npm run verify:rls`) | PASS — 16 checks now: 12 tenant relations plus both private buckets on both the public and the authenticated object endpoints. Bucket privacy and bucket POLICIES are separate settings and this checks the second |
+| Render round trip (browser → Storage → signed URL) | **NOT VERIFIED.** Needs a logged-in session, which an agent session cannot have here. The pieces are checked individually; the trip is not. Save one batch by hand and confirm the chip says "PNG guardado" |
 | Scene brief `2026-08-07.2`, **live A/B** (`npm run probe:scene-brief`) | **PASS, and by more than expected** — same brief through both prompt versions, three pieces each, then six images. The old version photographed the INDUSTRY (a van on a lift, four vans parked in a row, an empty warehouse); the new one photographs the ARGUMENT — a driver checking his watch beside a van with the hood up and pallets waiting, **a visible empty gap between two vans where the third should be**, a truck broken down on the shoulder at dusk. Legibility unaffected: all three keep a large calm area |
 | Scene brief — what did NOT transfer | **Place does not survive.** "Una avenida del conurbano" came back as an American highway with a vintage Chevrolet; number plates elsewhere read European. Also: three of three new images contain a person, against zero of three old ones — no `avoid` rule is broken (nobody smiles at camera) but it is a real change in kind, and some brands will not want faces |
 | Four new templates, geometry measured | **PASS after one fix the measurement forced** — 16 renders (4 templates × feed/story × sample/at-the-cap), zero clipping in any direction. `big-number` first came back 256px over: `unit` inherited 82% of the number size regardless of its own length, so "por semana" at 243px ran off the card. **Not verified: how they look** — the browser pane could not composite, so no screenshot was taken. Someone has to open `/plantillas` |
@@ -585,12 +588,13 @@ npm run lint
 npx tsc --noEmit
 npm run db:push        # apply migrations to remote
 npm run db:types       # regenerate lib/supabase/database.types.ts
-npm run verify:rls     # anonymous-access leak check
+npm run verify:rls     # anonymous-access leak check: 12 relations + 2 private buckets
 npm run verify:products  # 31 product assertions, no provider needed
 npm run verify:schedule  # 59 calendar assertions, run twice (local zone + UTC)
 npm run verify:legibility  # 26 contrast assertions against known bitmaps
 npm run verify:website     # 77 SSRF + extraction + error-copy assertions, no network
 npm run verify:search      # 22 snippet assertions
+npm run verify:render      # 30 render-fingerprint assertions, no network
 npm run probe:variants     # LIVE Claude call, ~US$0.04
 npm run probe:website <url># LIVE fetch + Claude call, ~US$0.04
 npm run probe:scene-ref  # costs ONE image; confirms the API takes an input image
@@ -1039,6 +1043,48 @@ in prose and that were being re-derived from it every session.
 Nothing else is installed. Of the official marketplace only `frontend-design`
 and `skill-creator` are relevant here; the rest is Discord, iMessage, plugin and
 MCP-server development.
+
+### A finished placa that exists outside the browser (step 1 of publishing)
+
+Until migration 0017 a rendered placa lived exactly as long as the tab: the
+editor rasterizes client-side, the ZIP is assembled client-side, and the bytes
+go to disk. Nothing server-side ever held the composed image.
+
+That is the blocker for publishing. Instagram's content-publishing API does not
+take bytes for a photo — it takes a URL and fetches it — so the file has to be
+somewhere reachable when Meta goes looking. It is equally what a server-side
+preview or any unattended job would need.
+
+**"Guardar placas" is a separate button from "Descargar ZIP", on purpose.**
+Exporting is "give me the files"; saving is "make these exist on the server".
+Folding the upload into the export would make a download quietly write to
+Storage, and a button that does more than it says is how surprises ship.
+
+- **A separate `renders` bucket, not `generated`.** Migration 0007 states that
+  nothing user-supplied reaches `generated` — its only writer is
+  `/api/generate/image` — and its 10 MB cap is described there as a blast radius
+  rather than a validation *because* no browser can write to it. A render is
+  written by the browser. A second bucket keeps that statement true.
+- **Private, read through signed URLs.** Which is also the exact shape Meta
+  needs: fetchable without a session, for a bounded window. One hour.
+- **The bytes never cross a Vercel function.** Browser → signed URL → Storage,
+  the same path as a logo. Only the JSON envelope goes through a handler, which
+  is what keeps this clear of the 4.5 MB body cap.
+- **A fresh object per render, never an overwrite.** The point of persisting is
+  to hand the URL to something that fetches it later; a path whose bytes change
+  underneath the holder, with a CDN in between, is a race. Renders therefore
+  accumulate and **nothing prunes them** — a known, deliberate gap.
+
+**The fingerprint is the part that matters.** A render is a photograph of a
+placa at a moment, and it stays a valid PNG at a valid URL long after the placa
+changed — nothing about the file says otherwise. So the inputs that determine
+the pixels are hashed and stored beside the path; when they disagree, the slide
+shows "PNG guardado desactualizado" instead of offering the file.
+`lib/export/render-fingerprint.ts` states exactly what it covers and, more
+usefully, the two things it does not: **the template's own source code**, and
+**the font files behind the family names**. Edit a template's padding and every
+stored render of it is stale without this noticing. Bounded — template edits are
+ours, rare, and land with a deploy — but written down rather than pretended away.
 
 ### Why the images were generic, and what fixed it
 

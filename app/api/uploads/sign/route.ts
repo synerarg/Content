@@ -13,7 +13,20 @@ import { requireWorkspaceId } from "@/lib/workspace";
   only this small JSON envelope ever crosses the function boundary.
 */
 
-const BUCKET = "brand-assets";
+/*
+  Two buckets, chosen by kind.
+
+  `brand-assets` is public — a logo and a .woff2 have to be fetchable by the
+  browser during rendering and export. `renders` is private: a composed placa is
+  unpublished client work, so it is read through signed URLs. Both are covered
+  by the same workspace-folder policies (migrations 0003 and 0017).
+*/
+const BUCKET_BY_KIND = {
+  logo: "brand-assets",
+  font: "brand-assets",
+  product: "brand-assets",
+  render: "renders",
+} as const;
 
 const LOGO_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "svg"]);
 const FONT_EXTENSIONS = new Set(["woff2"]);
@@ -23,6 +36,15 @@ const FONT_EXTENSIONS = new Set(["woff2"]);
   allowlist (migration 0007) is the second, independent check.
 */
 const PRODUCT_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp"]);
+/*
+  PNG only, and it is not a preference.
+
+  The rasterizer produces PNG and the `renders` bucket accepts nothing else
+  (migration 0017), so a signed URL for anything other than .png would mint a
+  credential for an upload Storage is going to reject — a failure that surfaces
+  as a mystery 400 from a different host.
+*/
+const RENDER_EXTENSIONS = new Set(["png"]);
 
 const requestSchema = z.discriminatedUnion("kind", [
   z.object({
@@ -41,12 +63,19 @@ const requestSchema = z.discriminatedUnion("kind", [
     filename: z.string().min(1).max(200),
     brandId: z.uuid(),
   }),
+  z.object({
+    kind: z.literal("render"),
+    filename: z.string().min(1).max(200),
+    brandId: z.uuid(),
+    slideId: z.uuid(),
+  }),
 ]);
 
 const EXTENSIONS_BY_KIND = {
   logo: LOGO_EXTENSIONS,
   font: FONT_EXTENSIONS,
   product: PRODUCT_EXTENSIONS,
+  render: RENDER_EXTENSIONS,
 } as const;
 
 function extensionOf(filename: string): string {
@@ -91,15 +120,30 @@ export async function POST(request: Request) {
       public bucket is CDN-cached besides. A new object costs nothing and keeps
       the old one resolvable.
     */
+    /*
+      A render also gets a fresh UUID, and here the reason is sharper than for
+      a product: the whole point of persisting it is to hand the URL to
+      something that fetches it later — Meta, an email, a preview. Overwriting
+      one path would mean a URL whose bytes change underneath whoever is holding
+      it, with a CDN in between. A new object per render costs nothing and makes
+      "the file at this URL" a fact rather than a race.
+
+      The cost is that renders accumulate. Nothing prunes them yet; that is a
+      known and deliberate gap, not an oversight — see HANDOFF.
+    */
     const path =
       body.kind === "logo"
         ? `${workspaceId}/logos/${crypto.randomUUID()}.${extension}`
         : body.kind === "product"
           ? `${workspaceId}/${body.brandId}/products/${crypto.randomUUID()}.${extension}`
-          : `${workspaceId}/${body.brandId}/fonts/${slugify(body.family)}-${body.weight}-normal.woff2`;
+          : body.kind === "render"
+            ? `${workspaceId}/${body.brandId}/${body.slideId}/${crypto.randomUUID()}.png`
+            : `${workspaceId}/${body.brandId}/fonts/${slugify(body.family)}-${body.weight}-normal.woff2`;
+
+    const bucket = BUCKET_BY_KIND[body.kind];
 
     const { data, error } = await supabase.storage
-      .from(BUCKET)
+      .from(bucket)
       .createSignedUploadUrl(path, { upsert: true });
 
     if (error) {
@@ -107,7 +151,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({
-      bucket: BUCKET,
+      bucket,
       path: data.path,
       token: data.token,
       signedUrl: data.signedUrl,

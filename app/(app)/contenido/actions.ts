@@ -73,6 +73,120 @@ export async function setSlideProduct(
   return { ok: true };
 }
 
+/*
+  ---------------------------------------------------------------------------
+  Persisted renders
+  ---------------------------------------------------------------------------
+
+  The composed PNG is written by the BROWSER, straight to Storage through a
+  signed URL, exactly like a logo or a product photo — Vercel caps request
+  bodies at 4.5 MB and a 1080x1920 story is comfortably over half of that
+  before anything else is in the envelope. These two actions handle only the
+  small JSON that has to cross a function boundary: recording where the bytes
+  landed, and minting a URL to read them back.
+*/
+
+const renderSchema = z.object({
+  path: z.string().min(1).max(400),
+  fingerprint: z.string().min(1).max(64),
+});
+
+/**
+ * Record the render a slide now has.
+ *
+ * Does NOT revalidate, for the same reason `setSlideProduct` does not: the
+ * batch page holds every background as a blob URL keyed by slide id, and a
+ * revalidate hands it a fresh `initialPosts` identity which re-runs the effect
+ * that owns those URLs. HANDOFF §7.
+ */
+export async function setSlideRender(
+  slideId: string,
+  input: unknown,
+): Promise<ActionResult> {
+  const parsed = renderSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Datos del render inválidos." };
+
+  /*
+    The path is checked against the caller's OWN workspace prefix before it is
+    stored. Storage policies already stop a member of another workspace writing
+    there, so this is not the boundary — it stops a member of THIS workspace
+    from recording a path that points at someone else's object, which the
+    policies have no opinion about and which would later be read back through a
+    signed URL minted by us.
+  */
+  const workspaceId = await requireWorkspaceId();
+  if (!parsed.data.path.startsWith(`${workspaceId}/`)) {
+    return { ok: false, error: "Ruta de render fuera del espacio de trabajo." };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("slides")
+    .update({
+      render_path: parsed.data.path,
+      render_fingerprint: parsed.data.fingerprint,
+      rendered_at: new Date().toISOString(),
+    })
+    .eq("id", slideId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) return { ok: false, error: error.message };
+  if (!data) return { ok: false, error: "No se encontró la placa." };
+
+  return { ok: true };
+}
+
+/** How long a render URL stays fetchable. */
+const RENDER_URL_TTL_SECONDS = 60 * 60;
+
+export type RenderUrlResult =
+  | { ok: true; url: string; expiresInSeconds: number }
+  | { ok: false; error: string };
+
+/**
+ * A URL for a slide's stored render, readable without a session.
+ *
+ * One hour. Long enough for a person to open it, short enough that a link
+ * pasted somewhere it should not be stops working the same afternoon — these
+ * are unpublished pieces for a client.
+ *
+ * The path is read from the row rather than accepted as an argument: taking one
+ * would turn this into a signing oracle for any object in the bucket, and RLS
+ * on `slides` is what makes reading the row equivalent to being allowed the
+ * file.
+ */
+export async function getSlideRenderUrl(
+  slideId: string,
+): Promise<RenderUrlResult> {
+  const supabase = await createClient();
+
+  const { data: slide, error } = await supabase
+    .from("slides")
+    .select("render_path")
+    .eq("id", slideId)
+    .maybeSingle();
+
+  if (error) return { ok: false, error: error.message };
+  if (!slide) return { ok: false, error: "No se encontró la placa." };
+  if (!slide.render_path) {
+    return { ok: false, error: "Esa placa todavía no tiene un PNG guardado." };
+  }
+
+  const { data, error: signError } = await supabase.storage
+    .from("renders")
+    .createSignedUrl(slide.render_path, RENDER_URL_TTL_SECONDS);
+
+  if (signError) return { ok: false, error: signError.message };
+  if (!data?.signedUrl) return { ok: false, error: "No se pudo firmar la URL." };
+
+  return {
+    ok: true,
+    url: data.signedUrl,
+    expiresInSeconds: RENDER_URL_TTL_SECONDS,
+  };
+}
+
 const postPatchSchema = z.object({
   caption: z.string().max(2200).optional(),
   hashtags: z.array(z.string().max(60)).max(30).optional(),

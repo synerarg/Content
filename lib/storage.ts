@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/client";
 
-const BUCKET = "brand-assets";
+/** The public bucket. Only `publicAssetUrl` names a bucket now — uploads read
+ *  it off the sign response, because not every kind goes to the same one. */
+const PUBLIC_BUCKET = "brand-assets";
 
 type SignRequest =
   | { kind: "logo"; filename: string }
@@ -11,7 +13,8 @@ type SignRequest =
       family: string;
       weight: number;
     }
-  | { kind: "product"; filename: string; brandId: string };
+  | { kind: "product"; filename: string; brandId: string }
+  | { kind: "render"; filename: string; brandId: string; slideId: string };
 
 /*
   The bucket enforces `allowed_mime_types` (migration 0007), and for a Blob body
@@ -66,14 +69,21 @@ export async function uploadViaSignedUrl(
     throw new Error(payload.error ?? "No se pudo preparar la subida.");
   }
 
-  const { path, token } = (await signRes.json()) as {
+  /*
+    The bucket comes from the RESPONSE, not from a constant here. A render goes
+    to the private `renders` bucket and everything else to `brand-assets`; the
+    route already decides that from the kind, and having the browser decide it a
+    second time is a rule in two places waiting to disagree.
+  */
+  const { bucket, path, token } = (await signRes.json()) as {
+    bucket: string;
     path: string;
     token: string;
   };
 
   const supabase = createClient();
   const { error } = await supabase.storage
-    .from(BUCKET)
+    .from(bucket)
     .uploadToSignedUrl(path, token, withDeclaredType(file));
 
   if (error) throw new Error(error.message);
@@ -92,5 +102,5 @@ export function publicAssetUrl(path: string | null | undefined): string | null {
   if (!path) return null;
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!base) return null;
-  return `${base}/storage/v1/object/public/${BUCKET}/${path}`;
+  return `${base}/storage/v1/object/public/${PUBLIC_BUCKET}/${path}`;
 }

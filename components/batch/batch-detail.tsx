@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
+  CloudCheck,
+  CloudUpload,
   Copy,
   CopyPlus,
   Loader2,
@@ -10,6 +12,7 @@ import {
   Package,
   RefreshCw,
   Shuffle,
+  TriangleAlert,
   Trash2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -38,6 +41,12 @@ import {
   toObjectUrl,
 } from "@/lib/export/rasterize";
 import { buildCaptionMarkdown, buildZip, slugify, type ZipEntry } from "@/lib/export/zip";
+import { persistSlideRender } from "@/lib/export/persist-render";
+import {
+  isRenderCurrent,
+  renderFingerprint,
+  type FingerprintInput,
+} from "@/lib/export/render-fingerprint";
 import {
   deleteBatch,
   duplicateBatch,
@@ -60,6 +69,7 @@ import {
   formatScheduleLabel,
   timeInputValue,
 } from "@/lib/schedule";
+import { formatDay } from "@/lib/format";
 import { BackgroundHistory } from "@/components/batch/background-history";
 import {
   useBackgroundQueue,
@@ -109,6 +119,10 @@ export type BatchSlide = {
   backgroundStatus: BackgroundStatus;
   backgroundError: string | null;
   backgroundAttempts: number;
+  /** Where the last persisted PNG of this slide lives, and what it depicts. */
+  renderPath: string | null;
+  renderedAt: string | null;
+  renderFingerprint: string | null;
 };
 
 export type BatchPost = {
@@ -161,6 +175,7 @@ export function BatchDetail({
   const [posts, setPosts] = useState(initialPosts);
   const [backgrounds, setBackgrounds] = useState<Record<string, string>>({});
   const [exporting, setExporting] = useState(false);
+  const [savingRenders, setSavingRenders] = useState(false);
   const [progress, setProgress] = useState("");
   /** Determinate ZIP progress: slides rasterized so far, and the total. */
   const [exportProgress, setExportProgress] = useState({ done: 0, total: 0 });
@@ -462,6 +477,136 @@ export function BatchDetail({
       toast.success("Caption copiado.");
     } catch {
       toast.error("No se pudo copiar.");
+    }
+  }
+
+  /*
+    ---------------------------------------------------------------------------
+    Persisting the rendered placas
+    ---------------------------------------------------------------------------
+
+    Separate from the ZIP on purpose. Exporting is "give me the files"; this is
+    "make these exist on the server", which is a different intent with a
+    different lifetime — the ZIP goes to someone's Downloads folder, a render
+    stays reachable by URL for anything that runs later. Folding it into the
+    export button would make a download quietly write to Storage, and a button
+    that does more than it says is how surprises get shipped.
+  */
+
+  /** What this slide's pixels currently depend on. */
+  function fingerprintFor(slide: BatchSlide): FingerprintInput | null {
+    if (!brandTokens) return null;
+    const product = productFor(slide);
+
+    return {
+      templateSlug: slide.templateSlug,
+      format: slide.format,
+      slots: slide.slots,
+      backgroundPath: slide.backgroundPath,
+      productId: slide.productId,
+      productHasTransparency: product ? product.hasTransparency : null,
+      palette: brandTokens.palette,
+      displayFamily: brandTokens.displayFamily,
+      displayWeight: brandTokens.displayWeight,
+      bodyFamily: brandTokens.bodyFamily,
+      bodyWeight: brandTokens.bodyWeight,
+      logoPath: brand.logo_path,
+    };
+  }
+
+  /** "guardada" / "desactualizada" / "sin guardar", for the chip. */
+  function renderState(slide: BatchSlide): "current" | "stale" | "none" {
+    if (!slide.renderPath) return "none";
+    const input = fingerprintFor(slide);
+    // Without brand tokens the comparison is unanswerable. Saying "stale" then
+    // would be a guess shown as a fact, so an existing render is left alone.
+    if (!input) return "current";
+    return isRenderCurrent(slide.renderFingerprint, renderFingerprint(input))
+      ? "current"
+      : "stale";
+  }
+
+  async function handleSaveRenders() {
+    if (!ready || !brandTokens) {
+      toast.error("Las tipografías todavía se están cargando.");
+      return;
+    }
+
+    setSavingRenders(true);
+    const startedAt = Date.now();
+
+    try {
+      const slides = posts.flatMap((post) => post.slides);
+      let done = 0;
+      let saved = 0;
+      let bytes = 0;
+      setExportProgress({ done: 0, total: slides.length });
+
+      for (const slide of slides) {
+        const node = slideRefs.current[slide.id];
+        const input = fingerprintFor(slide);
+        if (!node || !input) continue;
+
+        done++;
+        setProgress(`Guardando ${done}/${slides.length}…`);
+        setExportProgress({ done, total: slides.length });
+
+        // Skip what is already stored and still current. Re-rendering an
+        // unchanged placa costs the slowest operation in the app and produces
+        // an identical file under a new name.
+        if (renderState(slide) === "current") continue;
+
+        const spec = FORMATS[slide.format];
+        const blob = await rasterizeSlide({
+          node,
+          width: spec.width,
+          height: spec.height,
+          fontCss,
+          fonts: brand.fonts,
+        });
+
+        const result = await persistSlideRender({
+          slideId: slide.id,
+          brandId: brand.id,
+          blob,
+          expected: { width: spec.width, height: spec.height },
+          fingerprintInput: input,
+        });
+
+        saved++;
+        bytes += result.bytes;
+
+        // Local state, not a revalidate: the page holds every background as a
+        // blob URL keyed by slide id and a refresh would tear those down.
+        setPosts((current) =>
+          current.map((post) => ({
+            ...post,
+            slides: post.slides.map((s) =>
+              s.id === slide.id
+                ? {
+                    ...s,
+                    renderPath: result.path,
+                    renderFingerprint: result.fingerprint,
+                    renderedAt: new Date().toISOString(),
+                  }
+                : s,
+            ),
+          })),
+        );
+      }
+
+      const seconds = (Date.now() - startedAt) / 1000;
+      toast.success(
+        saved === 0
+          ? "Todas las placas ya estaban guardadas y al día."
+          : `${saved} ${saved === 1 ? "placa guardada" : "placas guardadas"} · ${(bytes / 1_048_576).toFixed(1)} MB · ${seconds.toFixed(1)}s`,
+      );
+    } catch (cause) {
+      notifyError(cause, { retry: handleSaveRenders });
+    } finally {
+      setSavingRenders(false);
+      setProgress("");
+      setExportProgress({ done: 0, total: 0 });
     }
   }
 
@@ -827,9 +972,31 @@ export function BatchDetail({
             <Trash2 className="size-4" />
             Eliminar
           </Button>
+          {/*
+            "Guardar" and "Descargar" are two different intents and get two
+            buttons. Saving puts the PNGs on the server, where a link, a preview
+            or a scheduled publication can reach them; downloading puts them on
+            this machine. Same rasterization underneath, different lifetime.
+          */}
+          <Button
+            variant="secondary"
+            onClick={handleSaveRenders}
+            disabled={savingRenders || exporting || exportBlockedReason !== null}
+            title={
+              exportBlockedReason ??
+              "Guardar el PNG de cada placa en el servidor, para compartir o publicar"
+            }
+          >
+            {savingRenders ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <CloudUpload className="size-4" />
+            )}
+            {savingRenders ? progress || "Guardando…" : "Guardar placas"}
+          </Button>
           <Button
             onClick={handleExportZip}
-            disabled={exporting || exportBlockedReason !== null}
+            disabled={exporting || savingRenders || exportBlockedReason !== null}
             title={exportBlockedReason ?? "Descargar todas las placas y captions"}
           >
             {exporting ? (
@@ -850,7 +1017,7 @@ export function BatchDetail({
         </p>
       ) : null}
 
-      {exporting && exportProgress.total > 0 ? (
+      {(exporting || savingRenders) && exportProgress.total > 0 ? (
         <div className="-mt-4 space-y-1.5">
           <div
             className="h-1 overflow-hidden rounded-full bg-muted"
@@ -907,7 +1074,7 @@ export function BatchDetail({
         }
       />
 
-      {exporting ? (
+      {exporting || savingRenders ? (
         <p className="text-xs text-muted-foreground">
           Dejá esta pestaña visible hasta que termine. El render usa
           requestAnimationFrame, que el navegador congela en pestañas de fondo.
@@ -1154,6 +1321,39 @@ export function BatchDetail({
                           <LegibilityDetails report={legibility[slide.id]} />
                         ) : null}
                       </div>
+                    ) : null}
+
+                    {/*
+                      Only shown once a render exists. "Desactualizada" is the
+                      state worth naming: a saved PNG that no longer matches the
+                      placa is a file something could publish, and nothing about
+                      the file itself would say it is wrong.
+                    */}
+                    {renderState(slide) !== "none" ? (
+                      <p
+                        className={cn(
+                          "flex items-center gap-1.5 px-0.5 text-[11px]",
+                          renderState(slide) === "stale"
+                            ? "text-destructive"
+                            : "text-muted-foreground",
+                        )}
+                      >
+                        {renderState(slide) === "stale" ? (
+                          <>
+                            <TriangleAlert className="size-3.5 shrink-0" />
+                            PNG guardado desactualizado — la placa cambió desde
+                            entonces. Volvé a guardar.
+                          </>
+                        ) : (
+                          <>
+                            <CloudCheck className="size-3.5 shrink-0" />
+                            PNG guardado{" "}
+                            {slide.renderedAt
+                              ? `el ${formatDay(slide.renderedAt.slice(0, 10))}`
+                              : ""}
+                          </>
+                        )}
+                      </p>
                     ) : null}
 
                     {/*

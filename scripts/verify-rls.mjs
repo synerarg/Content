@@ -78,9 +78,50 @@ for (const table of TENANT_TABLES) {
   console.log(`${table.padEnd(20)} ${String(res.status).padEnd(4)} ${body.slice(0, 60).padEnd(10)} ${verdict}`);
 }
 
+/*
+  Storage, and it is a separate question from the tables.
+
+  Bucket privacy and bucket POLICIES are two different settings, and getting the
+  first right does nothing for the second. A bucket marked private still answers
+  the public-object endpoint with 400/404 rather than serving bytes — that is
+  the flag doing its job — but the authenticated `object` endpoint is governed
+  entirely by the policies in migrations 0005 and 0017. `renders` is where
+  composed client work now lives, so both are checked from an anonymous caller.
+
+  What must NOT happen: 200 with image bytes.
+*/
+const PRIVATE_BUCKETS = ["generated", "renders"];
+const PROBE_OBJECT = "00000000-0000-0000-0000-000000000000/probe.png";
+
+for (const bucket of PRIVATE_BUCKETS) {
+  for (const [label, path] of [
+    ["public", `object/public/${bucket}/${PROBE_OBJECT}`],
+    ["authenticated", `object/${bucket}/${PROBE_OBJECT}`],
+  ]) {
+    const res = await fetch(`${url}/storage/v1/${path}`, {
+      headers: { apikey: key, Authorization: `Bearer ${key}` },
+    });
+    const body = await res.text();
+
+    // 400 and 404 are both correct here: Storage does not distinguish "denied"
+    // from "absent" to an anonymous caller, which is the behaviour we want.
+    const ok = res.status !== 200;
+    if (!ok) failures++;
+
+    console.log(
+      `${`${bucket} (${label})`.padEnd(24)} ${String(res.status).padEnd(4)} ${body
+        .slice(0, 40)
+        .replace(/\s+/g, " ")
+        .padEnd(42)} ${ok ? "PASS" : "FAIL (object served to anonymous caller)"}`,
+    );
+  }
+}
+
+const total = TENANT_TABLES.length + PRIVATE_BUCKETS.length * 2;
+
 console.log(
   failures === 0
-    ? `\nAll ${TENANT_TABLES.length} tenant relations deny anonymous reads.`
+    ? `\nAll ${total} checks pass: ${TENANT_TABLES.length} tenant relations and ${PRIVATE_BUCKETS.length} private buckets deny anonymous reads.`
     : `\n${failures} FAILURE(S) — do not ship.`,
 );
 process.exit(failures === 0 ? 0 : 1);
