@@ -287,6 +287,7 @@ template automatically teaches the prompts its slot names and character limits.
 | Sticky shell and section labels, **measured** | **PASS** — at `scrollY 1565` the aside sits at `top: 0` with the nav visible, and the section label in play sits at `top: 24` (its `top-6`). Before, the aside stretched to document height and left an empty column |
 | Render fingerprint, 30 asserts (`npm run verify:render`) | PASS — every field of `FingerprintInput` walked one at a time, plus a check that the walk itself covers the type, so a field added later without being hashed fails here. Key-order independence, the absent-vs-empty slot decision, and 2000 realistic variations with no collision. **Verified to be a real test:** dropping `backgroundPath` from the payload fails exactly the two assertions about it, with the identical hashes printed as the detail |
 | `renders` bucket denies anonymous reads (`npm run verify:rls`) | PASS — 16 checks now: 12 tenant relations plus both private buckets on both the public and the authenticated object endpoints. Bucket privacy and bucket POLICIES are separate settings and this checks the second |
+| `/preview` is unreachable in production, **both guards tested separately** | PASS, 2026-08-09 — real production build, real `next start`. With both guards: `/preview` → 307 to `/login`. With the MIDDLEWARE guard deliberately neutralised (`PREVIEW_ENABLED = true`) and rebuilt: still **404**. Either guard alone holds, which is the only thing that makes having two worth anything |
 | Render round trip (browser → Storage → signed URL) | **PASS, confirmed by the account owner on 2026-08-09.** Could not be checked from an agent session — it needs a logged-in browser — so it shipped as an open item and was closed by hand: "Guardar placas" on a real batch, chip reads "PNG guardado" |
 | Scene brief `2026-08-07.2`, **live A/B** (`npm run probe:scene-brief`) | **PASS, and by more than expected** — same brief through both prompt versions, three pieces each, then six images. The old version photographed the INDUSTRY (a van on a lift, four vans parked in a row, an empty warehouse); the new one photographs the ARGUMENT — a driver checking his watch beside a van with the hood up and pallets waiting, **a visible empty gap between two vans where the third should be**, a truck broken down on the shoulder at dusk. Legibility unaffected: all three keep a large calm area |
 | Scene brief — what did NOT transfer | **Place does not survive.** "Una avenida del conurbano" came back as an American highway with a vintage Chevrolet; number plates elsewhere read European. Also: three of three new images contain a person, against zero of three old ones — no `avoid` rule is broken (nobody smiles at camera) but it is a real change in kind, and some brands will not want faces |
@@ -1070,6 +1071,45 @@ of their descriptions is weighed on every design request. Suggested primary:
 set for motion. `design-taste-frontend` is 87 KB and aimed at landing pages and
 portfolios — this app is an authenticated internal tool, so it is the first one
 to drop if the set feels noisy.
+
+### `/preview` — the screens, without a session
+
+**The wall this removes.** Every screen sits behind Google OAuth, so nobody
+working through an agent session can see one. That is why this file says
+"verified by measurement, not by eye" in three places, and why four templates
+shipped that no human had looked at. Measuring geometry catches clipping; it
+says nothing about whether a screen is any good.
+
+`/preview` mounts the REAL components with fixture data: `BatchDetail`,
+`BrandForm`, `TemplateGallery`, inside a copy of the app shell. Three surfaces,
+listed at `/preview`.
+
+**Two independent guards, and both were tested alone.** An unauthenticated route
+that draws application chrome is fine for months and then is not.
+
+1. `app/preview/layout.tsx` calls `notFound()` when `NODE_ENV` is production.
+2. `lib/supabase/middleware.ts` treats `/preview` as public only under the same
+   condition, read at module scope so the branch is compiled out rather than
+   merely unreachable.
+
+A Vercel build — preview deployments included — is always production, so it is
+locked everywhere except a local `next dev`.
+
+**Fixtures are deliberately awkward.** `lib/preview/fixtures.ts` carries the
+states nobody designs for and that are expensive to reproduce by hand: a
+carousel slide with empty required slots, a background that failed with the real
+depleted-credit message, and a saved PNG whose fingerprint no longer matches, so
+the "desactualizado" row is visible without editing anything.
+
+**What it cannot show: typography.** `previewBrand.fonts` is empty on purpose —
+the real path fetches each `.woff2` from Storage and a fake path would 404 on
+every render — so everything falls back to the system face. Judge layout,
+hierarchy, colour and state here; judge type in the real app.
+
+The shell markup is COPIED into the preview layout rather than imported, because
+`app/(app)/layout.tsx` is an async Server Component that calls Supabase and
+redirects without a session — the exact thing being worked around. Keep the
+classes in sync when the shell changes.
 
 ### A finished placa that exists outside the browser (step 1 of publishing)
 

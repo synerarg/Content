@@ -5,7 +5,34 @@ import { supabaseEnv } from "./env";
 /** Routes reachable without a session. Everything else requires auth. */
 const PUBLIC_PREFIXES = ["/login", "/auth"];
 
+/*
+  `/preview` is public ONLY outside production.
+
+  It renders the app's real screens with fixture data so design work does not
+  require a session — see app/preview/layout.tsx for why that is needed at all.
+  It is also, by construction, an unauthenticated route that draws application
+  chrome, which is the kind of thing that is fine for months and then is not.
+
+  Two independent guards, and this is the outer one: a Vercel build — preview
+  deployments included — sets NODE_ENV to production, so there the route is
+  never treated as public and this middleware redirects it to /login. The inner
+  guard is a `notFound()` in the layout under the identical condition. Neither
+  relies on the other, and both fail locked.
+
+  Read at module scope on purpose: NODE_ENV is inlined at build time, so in a
+  production bundle this constant is `false` and the branch is gone rather than
+  merely unreachable.
+*/
+const PREVIEW_ENABLED = process.env.NODE_ENV !== "production";
+
 function isPublicPath(pathname: string) {
+  if (
+    PREVIEW_ENABLED &&
+    (pathname === "/preview" || pathname.startsWith("/preview/"))
+  ) {
+    return true;
+  }
+
   return PUBLIC_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );
