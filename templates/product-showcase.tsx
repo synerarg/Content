@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { token } from "@/lib/render/brand-tokens";
-import { fitLineHeight, fitTextSize } from "@/lib/render/fit-text";
+import { fitLetterSpacing, fitLineHeight, fitTextSize } from "@/lib/render/fit-text";
 import type { TemplateProps } from "./types";
 
 export const productShowcaseSlots = z.object({
@@ -78,13 +78,17 @@ export function ProductShowcase({
         }}
       />
 
+      {/* Offset toward the right, same reasoning as product-hero: the
+          headline and detail below are left-aligned, so a product dead
+          centre on both axes is the single most generic placement available
+          — moving it lets the copy claim the space on the left instead. */}
       <div
         style={{
           position: "relative",
           flex: 1,
           display: "flex",
           alignItems: "center",
-          justifyContent: "center",
+          justifyContent: "flex-end",
           padding: `${pad}px ${pad}px 0`,
           minHeight: 0,
         }}
@@ -109,6 +113,10 @@ export function ProductShowcase({
                 maxHeight: "100%",
                 overflow: "hidden",
                 borderRadius: 24,
+                // Matches product-hero's framed treatment — without a border
+                // this reads as a shadow floating on a similarly-toned
+                // surface rather than a deliberate card.
+                border: `2px solid ${primary}66`,
                 boxShadow: "0 28px 56px rgba(0,0,0,0.45)",
                 display: "flex",
               }}
@@ -164,7 +172,7 @@ export function ProductShowcase({
             fontWeight: brand.displayWeight,
             fontSize: headlineSize,
             lineHeight: fitLineHeight(headlineSize),
-            letterSpacing: "-0.02em",
+            letterSpacing: fitLetterSpacing(headlineSize),
             textWrap: "balance",
           }}
         >

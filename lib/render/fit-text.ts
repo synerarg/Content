@@ -56,3 +56,38 @@ export function fitLineHeight(size: number): number {
   if (size >= 40) return 1.16;
   return 1.28;
 }
+
+/**
+ * Letter-spacing that tightens as type gets bigger, the same idea as
+ * `fitLineHeight` applied to tracking instead of leading.
+ *
+ * Before this, every template picked one fixed tracking value (anywhere from
+ * -0.015em to -0.045em, chosen ad hoc per file) and used it at every size
+ * `fitTextSize` could produce for that slot — the same value for a headline at
+ * its 90-character floor and its 20-character ceiling. Large letterforms read
+ * too far apart as they scale up; tightening only matters once type is
+ * actually large, which is why this is continuous rather than tiered — a
+ * headline one character longer must not visibly snap to a different tracking
+ * value the way a tiered lookup would.
+ *
+ * MUST be applied directly on the element whose `fontSize` is `size` — never
+ * on an ancestor. `letter-spacing` in `em` resolves against the computed
+ * font-size of the element it is SET ON, and inherits as an already-resolved
+ * absolute length from there. Set it on a wrapper with no `fontSize` of its
+ * own and every differently-sized child inherits the same fixed pixel value
+ * regardless of its own size — silently reintroducing the exact "one value
+ * for every size" problem this function exists to fix.
+ */
+export function fitLetterSpacing(size: number): string {
+  const MAX_SIZE = 100;
+  const MIN_SIZE = 40;
+  const MAX_TRACKING = -0.03;
+  const MIN_TRACKING = -0.01;
+
+  if (size >= MAX_SIZE) return `${MAX_TRACKING}em`;
+  if (size <= MIN_SIZE) return `${MIN_TRACKING}em`;
+
+  const ratio = (size - MIN_SIZE) / (MAX_SIZE - MIN_SIZE);
+  const tracking = MIN_TRACKING + ratio * (MAX_TRACKING - MIN_TRACKING);
+  return `${tracking.toFixed(4)}em`;
+}

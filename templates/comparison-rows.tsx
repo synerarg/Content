@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { token } from "@/lib/render/brand-tokens";
-import { fitLineHeight, fitTextSize } from "@/lib/render/fit-text";
+import { fitLetterSpacing, fitLineHeight, fitTextSize } from "@/lib/render/fit-text";
 import type { TemplateProps } from "./types";
 
 export const comparisonRowsSlots = z.object({
@@ -73,8 +73,6 @@ export function ComparisonRows({
   ];
 
   const rowPadY = isStory ? 30 : 26;
-  const labelSize = isStory ? 40 : 35;
-  const valueSize = isStory ? 46 : 40;
 
   return (
     <div
@@ -127,7 +125,7 @@ export function ComparisonRows({
               fontWeight: brand.displayWeight,
               fontSize: headlineSize,
               lineHeight: fitLineHeight(headlineSize),
-              letterSpacing: "-0.025em",
+              letterSpacing: fitLetterSpacing(headlineSize),
               textWrap: "balance",
             }}
           >
@@ -137,8 +135,31 @@ export function ComparisonRows({
           <div style={{ display: "flex", flexDirection: "column", gap: isStory ? 18 : 14 }}>
             {rows.map((row, index) => {
               // Each row a little wider than the one above it, so the stack
-              // funnels down into the brand's own.
-              const width = `${Math.round(78 + (index * 22) / Math.max(1, rows.length - 1))}%`;
+              // funnels down into the brand's own. A lone "mine" row — every
+              // competitor slot left blank — has nothing to funnel FROM, so it
+              // gets the full width instead of stopping at the first step of a
+              // stack that isn't there.
+              const width =
+                rows.length === 1
+                  ? "100%"
+                  : `${Math.round(78 + (index * 22) / (rows.length - 1))}%`;
+
+              // label/value are the only free-length text in this template
+              // that never went through fitTextSize — a long label or a value
+              // that overflows its own nowrap line is the highest clipping
+              // risk here, since nobody has looked at this template by eye.
+              const labelSize = fitTextSize(row.label, {
+                max: isStory ? 40 : 35,
+                min: isStory ? 30 : 26,
+                from: 12,
+                to: 28,
+              });
+              const valueSize = fitTextSize(row.value, {
+                max: isStory ? 46 : 40,
+                min: isStory ? 30 : 26,
+                from: 6,
+                to: 16,
+              });
 
               return (
                 <div
@@ -163,7 +184,7 @@ export function ComparisonRows({
                       fontSize: labelSize,
                       fontWeight: brand.bodyWeight,
                       opacity: row.mine ? 1 : 0.55,
-                      letterSpacing: "-0.01em",
+                      letterSpacing: fitLetterSpacing(labelSize),
                     }}
                   >
                     {row.label}
@@ -173,7 +194,7 @@ export function ComparisonRows({
                       fontFamily: `'${brand.displayFamily}', sans-serif`,
                       fontWeight: brand.displayWeight,
                       fontSize: valueSize,
-                      letterSpacing: "-0.02em",
+                      letterSpacing: fitLetterSpacing(valueSize),
                       whiteSpace: "nowrap",
                       color: row.mine ? primary : fg,
                       opacity: row.mine ? 1 : 0.55,

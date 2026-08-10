@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { token } from "@/lib/render/brand-tokens";
-import { fitLineHeight, fitTextSize } from "@/lib/render/fit-text";
+import { fitLetterSpacing, fitLineHeight, fitTextSize } from "@/lib/render/fit-text";
 import type { TemplateProps } from "./types";
 
 export const productHeroSlots = z.object({
@@ -112,20 +112,24 @@ export function ProductHero({
             fontWeight: brand.displayWeight,
             fontSize: headlineSize,
             lineHeight: fitLineHeight(headlineSize),
-            letterSpacing: "-0.02em",
+            letterSpacing: fitLetterSpacing(headlineSize),
             textWrap: "balance",
           }}
         >
           {slots.headline}
         </h1>
 
-        {/* The product owns the middle band, at its own aspect ratio. */}
+        {/* The product owns the middle band, at its own aspect ratio — set
+            toward the right rather than dead centre, so the frame reads as
+            composed instead of a product stamped in the middle of a card.
+            The headline above and the facts below are already left-aligned,
+            so they claim the negative space this leaves on the left. */}
         <div
           style={{
             flex: 1,
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",
+            justifyContent: "flex-end",
             padding: `${isStory ? 56 : 40}px 0`,
             minHeight: 0,
           }}

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { token } from "@/lib/render/brand-tokens";
-import { fitLineHeight, fitTextSize } from "@/lib/render/fit-text";
+import { fitLetterSpacing, fitLineHeight, fitTextSize } from "@/lib/render/fit-text";
 import type { TemplateProps } from "./types";
 
 export const statementSlots = z.object({
@@ -101,7 +101,7 @@ export function Statement({ slots, format, brand }: TemplateProps<StatementSlots
             fontWeight: brand.displayWeight,
             fontSize: size,
             lineHeight: fitLineHeight(size),
-            letterSpacing: "-0.025em",
+            letterSpacing: fitLetterSpacing(size),
             textWrap: "balance",
           }}
         >

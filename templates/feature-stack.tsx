@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { token } from "@/lib/render/brand-tokens";
-import { fitLineHeight, fitTextSize } from "@/lib/render/fit-text";
+import { fitLetterSpacing, fitLineHeight, fitTextSize } from "@/lib/render/fit-text";
 import type { TemplateProps } from "./types";
 
 export const featureStackSlots = z.object({
@@ -160,7 +160,7 @@ export function FeatureStack({
               fontWeight: brand.displayWeight,
               fontSize: headlineSize,
               lineHeight: fitLineHeight(headlineSize),
-              letterSpacing: "-0.025em",
+              letterSpacing: fitLetterSpacing(headlineSize),
               textWrap: "balance",
               maxWidth: "94%",
             }}

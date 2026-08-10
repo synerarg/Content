@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { token } from "@/lib/render/brand-tokens";
+import { fitLetterSpacing, fitLineHeight, fitTextSize } from "@/lib/render/fit-text";
 import type { TemplateProps } from "./types";
 
 export const storyCtaSlots = z.object({
@@ -24,6 +25,18 @@ export function StoryCta({
   const onPrimary = token(brand, "on-primary", bg);
 
   const pad = isStory ? 96 : 80;
+  const headlineSize = fitTextSize(slots.headline, {
+    max: isStory ? 82 : 70,
+    min: isStory ? 50 : 44,
+    from: 22,
+    to: 70,
+  });
+  const sublineSize = fitTextSize(slots.subline, {
+    max: isStory ? 36 : 32,
+    min: isStory ? 28 : 25,
+    from: 40,
+    to: 120,
+  });
 
   return (
     <div
@@ -91,9 +104,9 @@ export function StoryCta({
             margin: 0,
             fontFamily: `'${brand.displayFamily}', sans-serif`,
             fontWeight: brand.displayWeight,
-            fontSize: isStory ? 82 : 70,
-            lineHeight: 1.06,
-            letterSpacing: "-0.02em",
+            fontSize: headlineSize,
+            lineHeight: fitLineHeight(headlineSize),
+            letterSpacing: fitLetterSpacing(headlineSize),
             textWrap: "balance",
           }}
         >
@@ -104,8 +117,9 @@ export function StoryCta({
           <p
             style={{
               margin: 0,
-              fontSize: isStory ? 36 : 32,
+              fontSize: sublineSize,
               lineHeight: 1.34,
+              letterSpacing: fitLetterSpacing(sublineSize),
               opacity: 0.84,
               fontWeight: brand.bodyWeight,
               maxWidth: "88%",

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { token } from "@/lib/render/brand-tokens";
 import type { TemplateProps } from "./types";
-import { fitTextSize } from "@/lib/render/fit-text";
+import { fitLetterSpacing, fitTextSize } from "@/lib/render/fit-text";
 
 export const bigNumberSlots = z.object({
   eyebrow: z.string().trim().max(40),
@@ -168,15 +168,36 @@ export function BigNumber({
               alignItems: "center",
               fontFamily: `'${brand.displayFamily}', sans-serif`,
               fontWeight: brand.displayWeight,
-              letterSpacing: "-0.045em",
               lineHeight: 0.86,
             }}
           >
-            <span style={{ fontSize: numberSize, whiteSpace: "nowrap" }}>
+            {/*
+              Tracking lives on each span, not the wrapper above. The wrapper
+              sets no fontSize of its own, so an em-based letterSpacing set
+              there resolved against whatever it inherited (the ~16px browser
+              default, since nothing upstream sets a base size) — a fixed
+              fraction-of-a-pixel applied equally to a 132px and a 340px
+              number. Set directly on the element that also sets fontSize,
+              `em` resolves against THAT size, which is the only way tracking
+              can actually scale with it.
+            */}
+            <span
+              style={{
+                fontSize: numberSize,
+                letterSpacing: fitLetterSpacing(numberSize),
+                whiteSpace: "nowrap",
+              }}
+            >
               {slots.number}
             </span>
             {slots.unit ? (
-              <span style={{ fontSize: unitSize, whiteSpace: "nowrap" }}>
+              <span
+                style={{
+                  fontSize: unitSize,
+                  letterSpacing: fitLetterSpacing(unitSize),
+                  whiteSpace: "nowrap",
+                }}
+              >
                 {slots.unit}
               </span>
             ) : null}

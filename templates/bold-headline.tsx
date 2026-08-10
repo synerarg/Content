@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { token } from "@/lib/render/brand-tokens";
+import { fitLetterSpacing, fitLineHeight, fitTextSize } from "@/lib/render/fit-text";
 import type { TemplateProps } from "./types";
 
 export const boldHeadlineSlots = z.object({
@@ -26,8 +27,18 @@ export function BoldHeadline({
   // Story has 570px more height at the same width, so it gets larger type and
   // deeper padding rather than the same block floated in extra whitespace.
   const pad = isStory ? 96 : 80;
-  const headlineSize = isStory ? 104 : 88;
-  const sublineSize = isStory ? 40 : 34;
+  const headlineSize = fitTextSize(slots.headline, {
+    max: isStory ? 104 : 88,
+    min: isStory ? 58 : 52,
+    from: 30,
+    to: 90,
+  });
+  const sublineSize = fitTextSize(slots.subline, {
+    max: isStory ? 40 : 34,
+    min: isStory ? 30 : 26,
+    from: 60,
+    to: 160,
+  });
 
   return (
     <div
@@ -56,14 +67,24 @@ export function BoldHeadline({
         />
       ) : null}
 
-      {/* Scrim: guarantees headline contrast regardless of what the image does.
-          Without this, a light background silently produces unreadable text —
-          exactly the failure this product exists to prevent. */}
+      {/*
+        Scrim: guarantees headline contrast regardless of what the image does.
+        Without this, a light background silently produces unreadable text —
+        exactly the failure this product exists to prevent.
+
+        Never fully transparent, unlike the original two-stop version. A
+        headline near its 90-character ceiling plus a subline near its 160
+        can still wrap to several lines even at fitTextSize's shrunk end, and
+        the text block grows UPWARD from the bottom (space-between) — a floor
+        of zero opacity at 35% down meant a tall block's top lines could land
+        on bare photo. The strong-contrast band also starts sooner (60%
+        instead of 72%), for the same reason.
+      */}
       <div
         style={{
           position: "absolute",
           inset: 0,
-          background: `linear-gradient(180deg, ${bg}33 0%, ${bg}00 35%, ${bg}D9 72%, ${bg} 100%)`,
+          background: `linear-gradient(180deg, ${bg}40 0%, ${bg}1F 30%, ${bg}E6 60%, ${bg} 100%)`,
         }}
       />
 
@@ -105,8 +126,8 @@ export function BoldHeadline({
               fontFamily: `'${brand.displayFamily}', sans-serif`,
               fontWeight: brand.displayWeight,
               fontSize: headlineSize,
-              lineHeight: 1.04,
-              letterSpacing: "-0.02em",
+              lineHeight: fitLineHeight(headlineSize),
+              letterSpacing: fitLetterSpacing(headlineSize),
               textWrap: "balance",
             }}
           >
@@ -119,6 +140,7 @@ export function BoldHeadline({
                 margin: 0,
                 fontSize: sublineSize,
                 lineHeight: 1.35,
+                letterSpacing: fitLetterSpacing(sublineSize),
                 fontWeight: brand.bodyWeight,
                 opacity: 0.82,
                 maxWidth: "88%",

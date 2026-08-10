@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { token } from "@/lib/render/brand-tokens";
+import { fitLetterSpacing, fitLineHeight, fitTextSize } from "@/lib/render/fit-text";
 import type { TemplateProps } from "./types";
 
 export const listTipsSlots = z.object({
@@ -28,8 +29,12 @@ export function ListTips({
   const primary = token(brand, "primary", "#84e9ff");
 
   const pad = isStory ? 96 : 80;
-  const titleSize = isStory ? 72 : 62;
-  const itemSize = isStory ? 38 : 33;
+  const titleSize = fitTextSize(slots.title, {
+    max: isStory ? 72 : 62,
+    min: isStory ? 46 : 40,
+    from: 24,
+    to: 70,
+  });
 
   // Empty slots are skipped rather than rendered blank, so a two-item list
   // still looks composed instead of leaving a hole.
@@ -90,8 +95,8 @@ export function ListTips({
             fontFamily: `'${brand.displayFamily}', sans-serif`,
             fontWeight: brand.displayWeight,
             fontSize: titleSize,
-            lineHeight: 1.06,
-            letterSpacing: "-0.02em",
+            lineHeight: fitLineHeight(titleSize),
+            letterSpacing: fitLetterSpacing(titleSize),
             textWrap: "balance",
             maxWidth: "92%",
           }}
@@ -106,40 +111,50 @@ export function ListTips({
             gap: isStory ? 32 : 26,
           }}
         >
-          {items.map((item, index) => (
-            <div
-              key={index}
-              style={{ display: "flex", alignItems: "flex-start", gap: 22 }}
-            >
-              <span
-                style={{
-                  flexShrink: 0,
-                  width: isStory ? 52 : 46,
-                  height: isStory ? 52 : 46,
-                  borderRadius: 999,
-                  border: `2px solid ${primary}`,
-                  color: primary,
-                  fontWeight: 600,
-                  fontSize: isStory ? 26 : 23,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
+          {items.map((item, index) => {
+            const itemSize = fitTextSize(item, {
+              max: isStory ? 38 : 33,
+              min: isStory ? 29 : 25,
+              from: 40,
+              to: 90,
+            });
+
+            return (
+              <div
+                key={index}
+                style={{ display: "flex", alignItems: "flex-start", gap: 22 }}
               >
-                {index + 1}
-              </span>
-              <span
-                style={{
-                  fontSize: itemSize,
-                  lineHeight: 1.32,
-                  fontWeight: brand.bodyWeight,
-                  paddingTop: isStory ? 6 : 4,
-                }}
-              >
-                {item}
-              </span>
-            </div>
-          ))}
+                <span
+                  style={{
+                    flexShrink: 0,
+                    width: isStory ? 52 : 46,
+                    height: isStory ? 52 : 46,
+                    borderRadius: 999,
+                    border: `2px solid ${primary}`,
+                    color: primary,
+                    fontWeight: 600,
+                    fontSize: isStory ? 26 : 23,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {index + 1}
+                </span>
+                <span
+                  style={{
+                    fontSize: itemSize,
+                    lineHeight: 1.32,
+                    letterSpacing: fitLetterSpacing(itemSize),
+                    fontWeight: brand.bodyWeight,
+                    paddingTop: isStory ? 6 : 4,
+                  }}
+                >
+                  {item}
+                </span>
+              </div>
+            );
+          })}
         </div>
       </div>
 

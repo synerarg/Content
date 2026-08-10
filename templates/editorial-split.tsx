@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { token } from "@/lib/render/brand-tokens";
-import { fitLineHeight, fitTextSize } from "@/lib/render/fit-text";
+import { fitLetterSpacing, fitLineHeight, fitTextSize } from "@/lib/render/fit-text";
 import type { TemplateProps } from "./types";
 
 export const editorialSplitSlots = z.object({
@@ -118,7 +118,7 @@ export function EditorialSplit({
             fontWeight: brand.displayWeight,
             fontSize: headlineSize,
             lineHeight: fitLineHeight(headlineSize),
-            letterSpacing: "-0.02em",
+            letterSpacing: fitLetterSpacing(headlineSize),
             textWrap: "balance",
           }}
         >

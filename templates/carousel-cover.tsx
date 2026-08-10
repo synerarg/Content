@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { token } from "@/lib/render/brand-tokens";
+import { fitLetterSpacing, fitLineHeight, fitTextSize } from "@/lib/render/fit-text";
 import type { TemplateProps } from "./types";
 
 export const carouselCoverSlots = z.object({
@@ -10,6 +11,17 @@ export const carouselCoverSlots = z.object({
 
 export type CarouselCoverSlots = z.infer<typeof carouselCoverSlots>;
 
+/*
+  Text at the top, photo carrying the bottom two-thirds — the opposite of
+  bold-headline and story-cta, which both anchor their whole stack to the
+  bottom behind a bottom-loaded scrim. Three templates under this registry
+  had converged on that exact recipe with different labels on the same
+  shape, which is what the redesign audit flagged: a carousel's own job —
+  promise what the next slides develop, then get out of the way for the
+  swipe — is better served by leading with the promise and leaving the photo
+  uncovered exactly where the swipe gesture happens, instead of another
+  bottom-left stack.
+*/
 export function CarouselCover({
   slots,
   format,
@@ -24,7 +36,18 @@ export function CarouselCover({
   const onPrimary = token(brand, "on-primary", bg);
 
   const pad = isStory ? 96 : 80;
-  const headlineSize = isStory ? 100 : 86;
+  const headlineSize = fitTextSize(slots.headline, {
+    max: isStory ? 100 : 86,
+    min: isStory ? 56 : 48,
+    from: 26,
+    to: 80,
+  });
+  const sublineSize = fitTextSize(slots.subline, {
+    max: isStory ? 38 : 33,
+    min: isStory ? 28 : 25,
+    from: 40,
+    to: 120,
+  });
 
   return (
     <div
@@ -53,11 +76,15 @@ export function CarouselCover({
         />
       ) : null}
 
+      {/* Top-loaded, the mirror of bold-headline's bottom-loaded scrim.
+          Fully clear by 58% down, so the lower two-fifths of the photo —
+          where the swipe pill sits and where a thumb actually is — stays
+          uncovered. */}
       <div
         style={{
           position: "absolute",
           inset: 0,
-          background: `linear-gradient(180deg, ${bg}66 0%, ${bg}CC 55%, ${bg} 100%)`,
+          background: `linear-gradient(180deg, ${bg}F2 0%, ${bg}D9 20%, ${bg}59 42%, ${bg}00 58%, ${bg}00 100%)`,
         }}
       />
 
@@ -67,46 +94,58 @@ export function CarouselCover({
           inset: 0,
           display: "flex",
           flexDirection: "column",
-          justifyContent: "flex-end",
-          gap: 30,
+          justifyContent: "space-between",
           padding: pad,
         }}
       >
-        <h1
-          style={{
-            margin: 0,
-            fontFamily: `'${brand.displayFamily}', sans-serif`,
-            fontWeight: brand.displayWeight,
-            fontSize: headlineSize,
-            lineHeight: 1.02,
-            letterSpacing: "-0.025em",
-            textWrap: "balance",
-          }}
-        >
-          {slots.headline}
-        </h1>
+        <div style={{ display: "flex", flexDirection: "column", gap: isStory ? 30 : 24 }}>
+          {brand.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={brand.logoUrl}
+              alt=""
+              style={{ height: isStory ? 56 : 48, objectFit: "contain" }}
+            />
+          ) : null}
 
-        {slots.subline ? (
-          <p
+          <h1
             style={{
               margin: 0,
-              fontSize: isStory ? 38 : 33,
-              lineHeight: 1.34,
-              opacity: 0.82,
-              fontWeight: brand.bodyWeight,
-              maxWidth: "86%",
+              fontFamily: `'${brand.displayFamily}', sans-serif`,
+              fontWeight: brand.displayWeight,
+              fontSize: headlineSize,
+              lineHeight: fitLineHeight(headlineSize),
+              letterSpacing: fitLetterSpacing(headlineSize),
+              textWrap: "balance",
             }}
           >
-            {slots.subline}
-          </p>
-        ) : null}
+            {slots.headline}
+          </h1>
 
-        {/* The swipe affordance is what separates a cover from a single post. */}
+          {slots.subline ? (
+            <p
+              style={{
+                margin: 0,
+                fontSize: sublineSize,
+                lineHeight: 1.34,
+                letterSpacing: fitLetterSpacing(sublineSize),
+                opacity: 0.82,
+                fontWeight: brand.bodyWeight,
+                maxWidth: "86%",
+              }}
+            >
+              {slots.subline}
+            </p>
+          ) : null}
+        </div>
+
+        {/* The swipe affordance is what separates a cover from a single
+            post — kept at the bottom, in the clear part of the frame, where
+            the gesture it names actually happens. */}
         {slots.swipe_hint ? (
           <div
             style={{
-              alignSelf: "flex-start",
-              marginTop: 8,
+              alignSelf: "flex-end",
               display: "flex",
               alignItems: "center",
               gap: 12,
@@ -123,21 +162,6 @@ export function CarouselCover({
           </div>
         ) : null}
       </div>
-
-      {brand.logoUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={brand.logoUrl}
-          alt=""
-          style={{
-            position: "absolute",
-            left: pad,
-            top: pad,
-            height: isStory ? 60 : 52,
-            objectFit: "contain",
-          }}
-        />
-      ) : null}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { token } from "@/lib/render/brand-tokens";
-import { fitLineHeight, fitTextSize } from "@/lib/render/fit-text";
+import { fitLetterSpacing, fitLineHeight, fitTextSize } from "@/lib/render/fit-text";
 import type { TemplateProps } from "./types";
 
 export const beforeAfterSlots = z.object({
@@ -111,7 +111,8 @@ export function BeforeAfter({
                 fontWeight: brand.displayWeight,
                 fontSize: beforeSize,
                 lineHeight: fitLineHeight(beforeSize),
-                letterSpacing: "-0.02em",
+                letterSpacing: fitLetterSpacing(beforeSize),
+                textWrap: "balance",
                 opacity: 0.42,
               }}
             >
@@ -124,6 +125,7 @@ export function BeforeAfter({
                 left: `-${Math.round(beforeSize * 0.06)}px`,
                 right: `-${Math.round(beforeSize * 0.06)}px`,
                 top: "50%",
+                transform: "translateY(-50%)",
                 height: Math.max(4, Math.round(beforeSize * 0.075)),
                 borderRadius: 999,
                 background: fg,
@@ -139,7 +141,7 @@ export function BeforeAfter({
               fontWeight: brand.displayWeight,
               fontSize: afterSize,
               lineHeight: fitLineHeight(afterSize),
-              letterSpacing: "-0.03em",
+              letterSpacing: fitLetterSpacing(afterSize),
               textWrap: "balance",
             }}
           >

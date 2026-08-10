@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { token } from "@/lib/render/brand-tokens";
+import { fitLetterSpacing, fitTextSize } from "@/lib/render/fit-text";
 import type { TemplateProps } from "./types";
 
 export const quoteCardSlots = z.object({
@@ -26,10 +27,16 @@ export function QuoteCard({
   const pad = isStory ? 96 : 80;
 
   // Quotes get unreadable fast when they run long, so size steps down as the
-  // text grows instead of overflowing the canvas.
-  const length = slots.quote.length;
-  const base = length > 160 ? 52 : length > 100 ? 62 : 74;
-  const quoteSize = isStory ? base + 8 : base;
+  // text grows instead of overflowing the canvas. A real interpolation now,
+  // not the 3-step lookup this used to be — that curve topped out at "longer
+  // than 160 characters" and never shrank further even as a quote grew toward
+  // its real 220-character ceiling.
+  const quoteSize = fitTextSize(slots.quote, {
+    max: isStory ? 82 : 74,
+    min: isStory ? 44 : 38,
+    from: 50,
+    to: 220,
+  });
 
   return (
     <div
@@ -100,7 +107,7 @@ export function QuoteCard({
             fontWeight: brand.displayWeight,
             fontSize: quoteSize,
             lineHeight: 1.18,
-            letterSpacing: "-0.015em",
+            letterSpacing: fitLetterSpacing(quoteSize),
             textWrap: "balance",
           }}
         >
