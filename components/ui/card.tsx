@@ -19,12 +19,14 @@ function Card({
           reference's inset-frost-plus-halo stack. A ring on top of it would
           draw the hard edge the whole system exists to avoid.
 
-          Padding is the reference's 24px. `size="sm"` keeps 16px and is the
-          escape hatch for dense screens — the batch detail puts three pieces
-          and five placas on one page, and 24px everywhere there would push
-          the work below the fold.
+          Padding is 20px, NOT the reference's 24px. 24 was tried and read as
+          loose: this is a working tool, and the reference sets that number for
+          a marketing page whose own rules ask for "cathedral rather than dense
+          SaaS" rhythm. 20 keeps the air without the drift, and matches the
+          `p-5` the screens had already settled on by hand. `size="sm"` stays
+          at 16px for the densest contexts.
         */
-        "group/card glass-card flex flex-col gap-(--card-spacing) overflow-hidden rounded-2xl bg-card py-(--card-spacing) text-sm text-card-foreground [--card-spacing:--spacing(6)] has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(4)] data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-2xl *:[img:last-child]:rounded-b-2xl",
+        "group/card glass-card flex flex-col gap-(--card-spacing) overflow-hidden rounded-2xl bg-card py-(--card-spacing) text-sm text-card-foreground [--card-spacing:--spacing(5)] has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(4)] data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-2xl *:[img:last-child]:rounded-b-2xl",
         className
       )}
       {...props}

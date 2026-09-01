@@ -71,7 +71,7 @@ export function ConfirmDialog({
           className={cn(
             "fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2",
             // ring, not shadow — same rule card.tsx and Dialog already follow.
-            "rounded-2xl bg-popover glass-modal p-6 text-sm duration-200",
+            "rounded-2xl bg-popover glass-modal p-5 text-sm duration-200",
             "data-open:animate-in data-closed:animate-out",
             "data-open:fade-in-0 data-closed:fade-out-0",
             "data-open:zoom-in-95 data-closed:zoom-out-95",
