@@ -26,7 +26,7 @@ export default function BuscarLoading() {
           <Skeleton className="h-9 w-28 rounded-md" />
         </div>
 
-        <Skeleton className="h-24 w-full rounded-xl" />
+        <Skeleton className="h-24 w-full rounded-2xl" />
       </div>
     </>
   );

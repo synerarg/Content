@@ -34,7 +34,7 @@ export default async function AppLayout({
     .maybeSingle();
 
   return (
-    <div className="blueprint-grid flex min-h-svh">
+    <div className="flex min-h-svh">
       {/*
         Sticky, and the height is what makes it so.
 

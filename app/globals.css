@@ -297,32 +297,46 @@
   }
 
   /*
-    The blueprint grid — ambient atmosphere behind the whole shell.
+    NO BLUEPRINT GRID, and no spotlight halo either.
 
-    The reference's conic spotlight halo is deliberately NOT here. That device
-    anchors a full-bleed hero, and an app screen has no hero: dropping a
-    spotlight behind a working surface would light one region of a form for no
-    reason. The grid carries the atmosphere on its own; the halo belongs to the
-    landing.
+    The reference puts a faint 1px grid behind every section and a conic halo at
+    the top of each full-bleed hero. Both were tried here and the grid was
+    rejected on sight: it reads as clutter behind working screens, which are
+    already dense with real lines — table rules, hairline card edges, the
+    calendar's own grid. Ambient texture competes with those instead of sitting
+    under them.
 
-    Masked so the lines fade before the viewport edges, which stops the grid
-    from reading as a table.
+    Neither belongs in the app. They are hero devices, and an app screen has no
+    hero. Keep both for the landing, where a full-bleed composition can carry
+    them; the implementation is in git history at 919450a if it is wanted there.
   */
-  .blueprint-grid {
-    background-image:
-      linear-gradient(to right, rgba(186, 215, 247, 0.06) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(186, 215, 247, 0.06) 1px, transparent 1px);
-    background-size: 88px 88px;
-    -webkit-mask-image: radial-gradient(
-      ellipse 90% 70% at 50% 0%,
-      #000 40%,
-      transparent 100%
-    );
-    mask-image: radial-gradient(
-      ellipse 90% 70% at 50% 0%,
-      #000 40%,
-      transparent 100%
-    );
+
+  /*
+    Section eyebrow label.
+
+    The reference's quiet marker between display type and body copy: dotDigital
+    at 15px, weight 400, 0.10em tracking, all caps, Moon Mist. dotDigital is
+    licensed, so this is its named substitute, JetBrains Mono.
+
+    NOT centered, and NOT flanked by fading lines. That part of the spec is a
+    landing device — it opens a full-bleed section. These labels head panels
+    inside working screens, where a centered rule across the panel would slice
+    a form in half. Only the type treatment carries over.
+
+    Literal values on purpose: --color-moon-mist lives in `@theme inline`, and
+    `inline` means Tailwind resolves those into utilities rather than emitting
+    them to :root. `var(--color-moon-mist)` here would be EMPTY. --font-eyebrow
+    is different — next/font sets it on <html>, so that one does resolve.
+  */
+  .eyebrow {
+    font-family: var(--font-eyebrow), ui-monospace, monospace;
+    font-size: 15px;
+    line-height: 1.2;
+    font-weight: 400;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #c7d3ea;
+    font-feature-settings: "tnum" on;
   }
 
   /* A glass plate lit from behind — the default card treatment. */

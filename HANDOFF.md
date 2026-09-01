@@ -27,6 +27,44 @@ Not a git repo beyond the create-next-app initial commit.
 
 ## 2. Environment and credentials — current state
 
+> ## ⚠️ 2026-09-01 — THE SUPABASE PROJECT NO LONGER EXISTS
+>
+> **Everything in this section about `dzxkxwuzfmoyktevfdfn` is dead.** Do not
+> spend time on it; the table below is kept only so the shape of the config is
+> still documented.
+>
+> Evidence, in the order it was gathered:
+> - `dzxkxwuzfmoyktevfdfn.supabase.co` returns **NXDOMAIN** against 8.8.8.8,
+>   while `supabase.com` resolves from the same machine. Not a DNS or network
+>   problem.
+> - A pause does not remove the domain, and an **org transfer preserves the ref,
+>   the URL and the keys** — so neither explains this. Only deletion does.
+> - The Supabase MCP connector now reaches exactly one org, `synera`
+>   (`gmjzxrqlvlbpapvikiji`), holding five unrelated client projects. None was
+>   created near 2026-08-05, which is when this project's migrations begin, so
+>   it is not among them under another name. Confirmed against the dashboard by
+>   the account owner: it is not in the personal account either.
+>
+> **What survives:** the whole schema. The 17 migrations in
+> `supabase/migrations` rebuild the tables, the RLS policies, the three buckets
+> (`brand-assets`, `generated`, `renders`), the usage view and the RPCs.
+>
+> **What is gone:** all data. Brands with their palettes, fonts, voice and art
+> direction; products; published history; batches, posts and slides; the
+> `generations` audit log; and every object in Storage — uploaded logos, brand
+> `.woff2` files, generated backgrounds and saved PNG renders.
+>
+> **Recovery**, when someone decides where the new project lives: create it,
+> `npm run db:link`, `npm run db:push`, `npm run db:types`, then redo Google
+> OAuth per §4 of `DEPLOY.md` — including `http://localhost:3000/**` on the
+> redirect allow-list, without which local sign-in bounces. Note that a new
+> project in the `synera` org costs **USD 10/month** (that org is on a paid
+> plan); a personal-account project on the free tier does not.
+>
+> **The Vercel deployment points at the dead project too**, so
+> `content-nine-neon.vercel.app` is down until its env vars carry the new
+> values.
+
 `.env.local` exists and is gitignored (`.env*`). Masked status as of handoff:
 
 | Variable | State | Notes |

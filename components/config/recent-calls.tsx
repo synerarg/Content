@@ -18,7 +18,7 @@ export type RecentCall = {
 export function RecentCalls({ calls }: { calls: RecentCall[] }) {
   if (calls.length === 0) {
     return (
-      <p className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+      <p className="rounded-2xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
         Todavía no se registró ninguna llamada.
       </p>
     );

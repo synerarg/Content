@@ -172,12 +172,12 @@ export function SearchPanel({
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
       {query.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+        <p className="rounded-2xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
           Escribí lo que buscás. Entiende frases entre comillas y palabras a
           excluir con un guion adelante.
         </p>
       ) : hits.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+        <p className="rounded-2xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
           Nada coincide con <span className="text-foreground">{query}</span>
           {brand !== ALL ? " en esta marca" : ""}. Probá con menos palabras.
         </p>

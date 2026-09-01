@@ -21,7 +21,7 @@ export default function CalendarioLoading() {
           <Skeleton className="h-9 w-48 rounded-md" />
         </div>
 
-        <div className="overflow-hidden rounded-xl border border-border">
+        <div className="overflow-hidden rounded-2xl border border-border">
           <div className="grid grid-cols-7 border-b border-border bg-muted">
             {Array.from({ length: 7 }, (_, i) => (
               <div key={i} className="flex justify-center px-2 py-2">

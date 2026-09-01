@@ -44,10 +44,10 @@ export function UsageBreakdown({
 }) {
   return (
     <section className="space-y-3">
-      <h2 className="text-sm font-semibold text-muted-foreground">{title}</h2>
+      <h2 className="eyebrow">{title}</h2>
 
       {rows.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+        <p className="rounded-2xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
           {emptyLabel}
         </p>
       ) : (

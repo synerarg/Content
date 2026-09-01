@@ -242,7 +242,7 @@ export default async function ConfiguracionPage() {
           saying what will appear here is more use than an empty table.
         */}
         {totals.calls === 0 ? (
-          <section className="space-y-2 rounded-xl border border-dashed border-border px-4 py-6 text-center">
+          <section className="space-y-2 rounded-2xl border border-dashed border-border px-4 py-6 text-center">
             <p className="text-sm">Todavía no se registró ningún consumo</p>
             <p className="mx-auto max-w-md text-sm text-muted-foreground">
               Cada llamada de IA queda registrada acá desde la primera: qué se
@@ -259,7 +259,7 @@ export default async function ConfiguracionPage() {
         ) : null}
 
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-muted-foreground">
+          <h2 className="eyebrow">
             Consumo
           </h2>
 
@@ -315,14 +315,14 @@ export default async function ConfiguracionPage() {
         />
 
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-muted-foreground">
+          <h2 className="eyebrow">
             Últimas {RECENT_LIMIT} llamadas
           </h2>
           <RecentCalls calls={recentCalls} />
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-muted-foreground">
+          <h2 className="eyebrow">
             Integraciones
           </h2>
           <EnvironmentStatus integrations={buildIntegrations()} />
@@ -333,7 +333,7 @@ export default async function ConfiguracionPage() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-muted-foreground">
+          <h2 className="eyebrow">
             Espacio de trabajo
           </h2>
           <div className="grid gap-3 sm:grid-cols-2">

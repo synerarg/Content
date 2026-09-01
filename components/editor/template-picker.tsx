@@ -52,7 +52,7 @@ export function TemplatePicker({
             aria-checked={selected}
             onClick={() => onChange(template.slug)}
             className={cn(
-              "group space-y-2 rounded-xl border p-2 text-left transition-colors",
+              "group space-y-2 rounded-2xl border p-2 text-left transition-colors",
               selected
                 ? "border-[color-mix(in_oklch,var(--synera-accent)_45%,transparent)] bg-accent"
                 : "border-border hover:border-[color-mix(in_oklch,var(--synera-accent)_25%,transparent)]",

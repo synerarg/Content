@@ -11,14 +11,22 @@ export function PageHeader({
     <header className="flex flex-wrap items-start justify-between gap-4 border-b border-border px-6 py-5 md:px-8">
       <div className="min-w-0 space-y-1">
         {/*
-          heading-sm at weight 500, not 600+.
+          `heading` (28px) in Ice Highlight, at weight 500.
 
-          The reference is explicit that display type's authority comes from
-          size rather than volume, and forbids bold on it. 24px of Space
-          Grotesk at 500 reads as more of a heading than 18px of semibold did,
-          while sitting quieter on the page.
+          The colour is the half that was actually missing. The reference sets
+          out a four-step progression — Ice Highlight, Frost Glow, Moon Mist,
+          Fog Veil for heading, body, muted body, helper — and this h1 was
+          inheriting --foreground, which is Frost Glow. The title was rendering
+          in exactly the same colour as body copy, so it had one step of
+          hierarchy (size) doing the work of two.
+
+          Weight stays 500 on purpose: the reference forbids 600+ on display
+          type, and with the size and colour steps both present it no longer
+          needs the volume.
         */}
-        <h1 className="truncate text-heading-sm font-medium">{title}</h1>
+        <h1 className="truncate text-heading font-medium text-ice-highlight">
+          {title}
+        </h1>
         {description ? (
           <p className="truncate text-body-sm text-muted-foreground">
             {description}

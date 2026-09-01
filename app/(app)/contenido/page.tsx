@@ -92,7 +92,7 @@ export default async function ContenidoPage() {
 
         {batches && batches.length > 0 ? (
           <div className="space-y-3">
-            <h2 className="text-sm font-semibold text-muted-foreground">
+            <h2 className="eyebrow">
               Lotes
             </h2>
             <div className="grid gap-3">

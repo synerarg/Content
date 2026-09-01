@@ -291,7 +291,7 @@ export function CalendarBoard({
       </div>
 
       {/* --------------------------------------------------------------- */}
-      <div className="overflow-hidden rounded-xl border border-border">
+      <div className="overflow-hidden rounded-2xl border border-border">
         <div className="grid grid-cols-7 border-b border-border bg-muted">
           {WEEKDAY_LABELS.map((label) => (
             <div
@@ -345,13 +345,13 @@ export function CalendarBoard({
       <section className="space-y-3">
         <div className="flex items-center gap-2">
           <Inbox className="size-4 text-[var(--synera-accent)]" />
-          <h2 className="text-sm font-semibold">
+          <h2 className="eyebrow">
             Sin programar ({visiblePending.length})
           </h2>
         </div>
 
         {visiblePending.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+          <p className="rounded-2xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
             Todas las piezas tienen fecha.
           </p>
         ) : (

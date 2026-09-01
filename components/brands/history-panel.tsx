@@ -154,7 +154,7 @@ export function HistoryPanel({
       <section className="space-y-4 rounded-2xl border border-border bg-card glass-card p-5">
         <div className="flex items-center gap-2">
           <Upload className="size-4 text-[var(--synera-accent)]" />
-          <h2 className="text-sm font-semibold">Importar contenido publicado</h2>
+          <h2 className="eyebrow">Importar contenido publicado</h2>
         </div>
 
         <div className="space-y-2">
@@ -196,7 +196,7 @@ export function HistoryPanel({
       <section className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-sm font-semibold">Ángulos ya usados</h2>
+            <h2 className="eyebrow">Ángulos ya usados</h2>
             <p className="text-xs text-muted-foreground">
               {analysedAt
                 ? `Analizado el ${formatDateTime(analysedAt)} sobre ${posts.length} posts.`
@@ -267,7 +267,7 @@ export function HistoryPanel({
 
             {analysis.hooks.length > 0 ? (
               <div className="space-y-2">
-                <h3 className="text-xs uppercase tracking-wider text-muted-foreground">
+                <h3 className="eyebrow">
                   Ganchos gastados
                 </h3>
                 <ul className="space-y-1">
@@ -287,7 +287,7 @@ export function HistoryPanel({
             </p>
           </div>
         ) : (
-          <p className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+          <p className="rounded-2xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
             {posts.length === 0
               ? "Importá contenido publicado para poder analizarlo."
               : "Analizá el historial para que los lotes dejen de repetir ángulos."}
@@ -297,12 +297,12 @@ export function HistoryPanel({
 
       {/* ---------------------------------------------------------------- */}
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-muted-foreground">
+        <h2 className="eyebrow">
           Contenido cargado ({posts.length})
         </h2>
 
         {posts.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+          <p className="rounded-2xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
             Todavía no hay nada cargado.
           </p>
         ) : (

@@ -87,7 +87,7 @@ export function ListRowSkeleton() {
  */
 export function SlidePreviewSkeleton({ className }: { className?: string }) {
   return (
-    <div className={`rounded-xl border border-border p-3 ${className ?? ""}`}>
+    <div className={`rounded-2xl border border-border p-3 ${className ?? ""}`}>
       <Skeleton className="aspect-[4/5] w-full rounded-lg" />
     </div>
   );

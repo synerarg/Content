@@ -122,7 +122,7 @@ export function SchedulePanel({
     <section className="space-y-4 border-t border-border pt-4">
       <div className="flex flex-wrap items-center gap-2">
         <CalendarRange className="size-4 text-[var(--synera-accent)]" />
-        <h2 className="text-sm font-semibold">Programar el lote</h2>
+        <h2 className="eyebrow">Programar el lote</h2>
         <span className="text-xs text-muted-foreground">
           {scheduledCount === 0
             ? `${postCount} pieza${postCount === 1 ? "" : "s"} sin fecha`

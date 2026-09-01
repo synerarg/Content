@@ -97,7 +97,7 @@ export default function AyudaPage() {
 
       <div className="space-y-10 px-6 py-8 md:px-8">
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-muted-foreground">
+          <h2 className="eyebrow">
             El flujo, en cinco pasos
           </h2>
           <div className="grid gap-3 lg:grid-cols-2">
@@ -127,7 +127,7 @@ export default function AyudaPage() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-muted-foreground">Atajos</h2>
+          <h2 className="eyebrow">Atajos</h2>
           <p className="text-sm text-muted-foreground">
             Dentro de un lote, apretá{" "}
             <kbd className="rounded-md border border-border bg-card px-1.5 py-0.5 font-mono text-xs">
@@ -139,7 +139,7 @@ export default function AyudaPage() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-muted-foreground">
+          <h2 className="eyebrow">
             Preguntas frecuentes
           </h2>
           <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card glass-card">

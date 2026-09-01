@@ -250,7 +250,7 @@ function AddProduct({ brandId }: { brandId: string }) {
     <section className="space-y-4 rounded-2xl border border-border bg-card glass-card p-5">
       <div className="flex items-center gap-2">
         <Package className="size-4 text-[var(--synera-accent)]" />
-        <h2 className="text-sm font-semibold">Agregar producto</h2>
+        <h2 className="eyebrow">Agregar producto</h2>
       </div>
 
       <ImagePicker
@@ -392,7 +392,7 @@ function ProductRow({
   return (
     <div className="space-y-4 p-5">
       <div className="flex items-start justify-between gap-3">
-        <h3 className="text-sm font-semibold">{product.name}</h3>
+        <h3 className="eyebrow">{product.name}</h3>
         <Button
           variant="ghost"
           size="icon"
@@ -467,12 +467,12 @@ export function ProductPanel({
       <AddProduct brandId={brandId} />
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-muted-foreground">
+        <h2 className="eyebrow">
           Productos cargados ({products.length})
         </h2>
 
         {products.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+          <p className="rounded-2xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
             Todavía no hay productos. Cargá uno y vas a poder generar piezas con
             la foto real del producto en vez de una imagen inventada.
           </p>

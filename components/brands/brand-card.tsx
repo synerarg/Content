@@ -160,7 +160,7 @@ export function BrandCard({ brand }: { brand: BrandCardData }) {
               className="size-full object-contain p-1.5"
             />
           ) : (
-            <span className="text-sm font-semibold text-muted-foreground">
+            <span className="eyebrow">
               {brand.name.charAt(0).toUpperCase()}
             </span>
           )}

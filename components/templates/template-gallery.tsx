@@ -47,7 +47,7 @@ export function TemplateGallery({ brand }: { brand: EditorBrand | null }) {
           // pure waiting for the last row.
           style={{ animationDelay: `${Math.min(index, 10) * 40}ms` }}
         >
-          <div className="rounded-xl border border-border p-3">
+          <div className="rounded-2xl border border-border p-3">
             <SlidePreview
               maxWidth={300}
               template={template}

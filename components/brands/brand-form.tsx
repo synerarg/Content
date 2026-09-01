@@ -68,7 +68,7 @@ function Section({
         section that is six fields long.
       */}
       <div className="space-y-1 md:sticky md:top-6 md:self-start">
-        <h2 className="text-sm font-semibold">{title}</h2>
+        <h2 className="eyebrow">{title}</h2>
         <p className="text-xs text-muted-foreground">{description}</p>
       </div>
       <div className="space-y-4">{children}</div>

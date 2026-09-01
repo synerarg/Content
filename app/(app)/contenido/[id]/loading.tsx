@@ -27,7 +27,7 @@ export default function BatchLoading() {
           </div>
 
           {/* The queue progress strip. */}
-          <Skeleton className="h-16 w-full rounded-xl" />
+          <Skeleton className="h-16 w-full rounded-2xl" />
 
           {/* SchedulePanel. */}
           <div className="space-y-4 border-t border-border pt-4">

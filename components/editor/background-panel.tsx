@@ -135,7 +135,7 @@ export function BackgroundPanel({
     <div className="space-y-4 rounded-2xl border border-border bg-card glass-card p-5">
       <div className="flex items-center gap-2">
         <ImageIcon className="size-4 text-[var(--synera-accent)]" />
-        <h2 className="text-sm font-semibold">Fondo</h2>
+        <h2 className="eyebrow">Fondo</h2>
       </div>
 
       <div className="space-y-2">

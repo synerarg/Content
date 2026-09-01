@@ -24,7 +24,7 @@ export default function ProductosLoading() {
 
         <div className="space-y-3">
           <Skeleton className="h-4 w-44" />
-          <Skeleton className="h-32 w-full rounded-xl" />
+          <Skeleton className="h-32 w-full rounded-2xl" />
         </div>
       </div>
     </>

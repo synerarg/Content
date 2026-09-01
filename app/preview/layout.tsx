@@ -47,7 +47,7 @@ export default function PreviewLayout({
   if (process.env.NODE_ENV === "production") notFound();
 
   return (
-    <div className="blueprint-grid flex min-h-svh">
+    <div className="flex min-h-svh">
       {/* The real shell markup, copied rather than imported: `app/(app)/layout`
           is an async Server Component that calls Supabase and redirects without
           a session, which is the whole thing being worked around here. Keep the

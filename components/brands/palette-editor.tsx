@@ -126,7 +126,7 @@ export function PaletteEditor({
                 aria-label="Valor hex"
                 value={token.value}
                 onChange={(event) => update(index, { value: event.target.value })}
-                // Deliberately NOT this agency's own cyan (#84E9FF) — the same
+                // Deliberately NOT this agency's own accent (#663AF3) — the same
                 // trap brand-form.tsx's `name` field has a comment warning
                 // about. A placeholder that IS a real, plausible brand colour
                 // is a placeholder someone eventually ships by accident.
