@@ -19,7 +19,7 @@ export default function EditorLoading() {
           {Array.from({ length: 2 }, (_, panel) => (
             <div
               key={panel}
-              className="space-y-4 rounded-xl border border-border bg-card p-5"
+              className="space-y-4 rounded-2xl border border-border bg-card glass-card p-5"
             >
               <Skeleton className="h-4 w-40" />
               <Skeleton className="h-20 w-full rounded-md" />

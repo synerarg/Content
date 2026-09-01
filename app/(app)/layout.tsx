@@ -34,7 +34,7 @@ export default async function AppLayout({
     .maybeSingle();
 
   return (
-    <div className="flex min-h-svh">
+    <div className="blueprint-grid flex min-h-svh">
       {/*
         Sticky, and the height is what makes it so.
 
@@ -56,7 +56,7 @@ export default async function AppLayout({
             aria-hidden
             className="size-2 rounded-full bg-[var(--synera-accent)] shadow-[0_0_10px_var(--synera-accent)]"
           />
-          <span className="text-sm font-semibold tracking-tight">Synera</span>
+          <span className="text-base font-medium">Synera</span>
         </div>
 
         {/* Scrolls on its own only if the nav ever outgrows a short viewport;
@@ -89,7 +89,7 @@ export default async function AppLayout({
                 aria-hidden
                 className="size-2 rounded-full bg-[var(--synera-accent)] shadow-[0_0_10px_var(--synera-accent)]"
               />
-              <span className="text-sm font-semibold tracking-tight">
+              <span className="text-base font-medium">
                 Synera
               </span>
             </div>

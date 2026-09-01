@@ -564,7 +564,10 @@ export function SlideEditor({ brands }: { brands: EditorBrand[] }) {
 
         {brandTokens ? (
           <>
-            <div className="rounded-xl border border-border p-3">
+            {/* The matte. Neutral rather than frosted for the same reason the
+                placa's own field is — the padding here is what the client's
+                colours are read against, so it cannot carry a blue tint. */}
+            <div className="placa-lightbox rounded-2xl p-3">
               <SlidePreview
                 maxWidth={PREVIEW_WIDTH}
                 template={template}

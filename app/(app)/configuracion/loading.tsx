@@ -12,7 +12,7 @@ export default function ConfiguracionLoading() {
             {Array.from({ length: 4 }, (_, i) => (
               <div
                 key={i}
-                className="space-y-2 rounded-xl border border-border bg-card p-4"
+                className="space-y-2 rounded-2xl border border-border bg-card glass-card p-4"
               >
                 <Skeleton className="h-3 w-20" />
                 <Skeleton className="h-8 w-24" />
@@ -25,7 +25,7 @@ export default function ConfiguracionLoading() {
         {Array.from({ length: 2 }, (_, section) => (
           <div key={section} className="space-y-3">
             <Skeleton className="h-4 w-28" />
-            <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+            <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card glass-card">
               {Array.from({ length: 2 }, (_, row) => (
                 <div
                   key={row}

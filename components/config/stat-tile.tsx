@@ -10,7 +10,7 @@ export function StatTile({
   accent?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
+    <div className="rounded-2xl border border-border bg-card glass-card p-4">
       <p className="text-xs uppercase tracking-wider text-muted-foreground">
         {label}
       </p>

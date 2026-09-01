@@ -16,11 +16,19 @@ import { cn } from "@/lib/utils";
 
 export type ChipTone = "neutral" | "accent" | "destructive";
 
+/*
+  Filled, not outlined, and 6px rather than a pill.
+
+  Both changes come from the reference's Badge: a translucent cool-white fill
+  with a faint inner glow, at the badge radius. It also frees the pill shape to
+  mean "button" exclusively — outlined pills and outlined chips at the same
+  height had been telling the eye that a status was something to click.
+*/
 const TONE_CLASS: Record<ChipTone, string> = {
-  neutral: "border-border text-muted-foreground",
+  neutral: "bg-luminous-fill text-moon-mist",
   accent:
-    "border-[color-mix(in_oklch,var(--synera-accent)_28%,transparent)] text-[var(--synera-accent)]",
-  destructive: "border-destructive/30 text-destructive",
+    "bg-[color-mix(in_oklch,var(--synera-accent)_14%,transparent)] text-[var(--synera-accent)]",
+  destructive: "bg-destructive/15 text-destructive",
 };
 
 export function StatusChip({
@@ -43,7 +51,10 @@ export function StatusChip({
     <span
       title={title}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] tabular-nums transition-colors duration-150 ease-(--ease-out)",
+        // text-caption is 12px — the reference's badge size. It only survives
+        // alongside the tone's text colour because cn() knows the scale; see
+        // lib/utils.ts.
+        "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-caption font-medium tabular-nums shadow-(--elevation-hairline) transition-colors duration-150 ease-(--ease-out)",
         TONE_CLASS[tone],
         className,
       )}

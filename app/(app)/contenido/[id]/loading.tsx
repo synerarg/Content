@@ -46,7 +46,7 @@ export default function BatchLoading() {
         {Array.from({ length: 2 }, (_, post) => (
           <section
             key={post}
-            className="space-y-4 rounded-xl border border-border bg-card p-5"
+            className="space-y-4 rounded-2xl border border-border bg-card glass-card p-5"
           >
             <div className="flex flex-wrap items-center gap-3">
               <Skeleton className="h-6 w-24 rounded-full" />

@@ -172,7 +172,7 @@ export function SuggestInput({
       {completion && typed ? (
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 flex items-center overflow-hidden rounded-lg px-2.5 py-1 text-base md:text-sm"
+          className="pointer-events-none absolute inset-0 flex items-center overflow-hidden rounded-md px-2.5 py-1 text-base md:text-sm"
         >
           <span className="invisible whitespace-pre">{typed}</span>
           <span className="whitespace-pre text-muted-foreground/60">{completion}</span>
@@ -213,7 +213,7 @@ export function SuggestTextarea({
       {completion && typed ? (
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg px-2.5 py-2 text-base break-words whitespace-pre-wrap md:text-sm"
+          className="pointer-events-none absolute inset-0 overflow-hidden rounded-md px-2.5 py-2 text-base break-words whitespace-pre-wrap md:text-sm"
         >
           <span className="invisible">{typed}</span>
           <span className="text-muted-foreground/60">{completion}</span>

@@ -13,7 +13,7 @@ export function EmptyState({
 }) {
   return (
     <div className="flex flex-col items-center justify-center px-6 py-24 text-center">
-      <span className="mb-5 flex size-11 items-center justify-center rounded-xl border border-[color-mix(in_oklch,var(--synera-accent)_22%,transparent)] bg-card">
+      <span className="mb-5 flex size-11 items-center justify-center rounded-full border border-[color-mix(in_oklch,var(--synera-accent)_22%,transparent)] bg-accent">
         <Icon className="size-5 text-[var(--synera-accent)]" />
       </span>
       <h2 className="text-base font-medium text-balance">{title}</h2>

@@ -132,7 +132,7 @@ export default async function ContenidoPage() {
                   <Link
                     key={batch.id}
                     href={`/contenido/${batch.id}`}
-                    className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-card p-4 transition-colors hover:border-[color-mix(in_oklch,var(--synera-accent)_30%,transparent)]"
+                    className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-card glass-card p-4 transition-colors hover:border-[color-mix(in_oklch,var(--synera-accent)_30%,transparent)]"
                   >
                     <div className="min-w-0 space-y-1">
                       <p className="font-medium leading-none">{batch.title}</p>

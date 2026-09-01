@@ -213,7 +213,7 @@ export function CreateBatchPanel({ brands }: { brands: BrandOption[] }) {
   }
 
   return (
-    <div className="space-y-5 rounded-xl border border-border bg-card p-5">
+    <div className="space-y-5 rounded-2xl border border-border bg-card glass-card p-5">
       <div className="flex items-center gap-2">
         <Sparkles className="size-4 text-[var(--synera-accent)]" />
         <h2 className="text-sm font-semibold">Nuevo lote</h2>

@@ -203,12 +203,12 @@ export function SearchPanel({
             .
           </p>
 
-          <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+          <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card glass-card">
             {hits.map((hit) => (
               <Link
                 key={hit.postId}
                 href={`/contenido/${hit.batchId}`}
-                className="block space-y-2 p-4 transition-colors hover:bg-accent/20"
+                className="block space-y-2 p-4 transition-colors hover:bg-accent"
               >
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
                   <span className="text-foreground">{hit.brandName}</span>

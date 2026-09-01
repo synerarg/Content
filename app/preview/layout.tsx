@@ -47,7 +47,7 @@ export default function PreviewLayout({
   if (process.env.NODE_ENV === "production") notFound();
 
   return (
-    <div className="flex min-h-svh">
+    <div className="blueprint-grid flex min-h-svh">
       {/* The real shell markup, copied rather than imported: `app/(app)/layout`
           is an async Server Component that calls Supabase and redirects without
           a session, which is the whole thing being worked around here. Keep the
@@ -58,7 +58,7 @@ export default function PreviewLayout({
             aria-hidden
             className="size-2 rounded-full bg-[var(--synera-accent)] shadow-[0_0_10px_var(--synera-accent)]"
           />
-          <span className="text-sm font-semibold tracking-tight">Synera</span>
+          <span className="text-base font-medium">Synera</span>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto py-2">
@@ -76,7 +76,7 @@ export default function PreviewLayout({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex flex-wrap items-center gap-1 border-b border-border bg-card/40 px-6 py-2">
+        <div className="flex flex-wrap items-center gap-1 border-b border-border bg-muted px-6 py-2">
           {SURFACES.map((surface) => (
             <Link
               key={surface.href}

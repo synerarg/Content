@@ -104,7 +104,7 @@ export default function AyudaPage() {
             {STEPS.map(({ icon: Icon, title, body, href, hrefLabel }) => (
               <div
                 key={title}
-                className="flex gap-3 rounded-xl border border-border bg-card p-4"
+                className="flex gap-3 rounded-2xl border border-border bg-card glass-card p-4"
               >
                 <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-[color-mix(in_oklch,var(--synera-accent)_22%,transparent)] bg-background">
                   <Icon className="size-4 text-[var(--synera-accent)]" />
@@ -142,7 +142,7 @@ export default function AyudaPage() {
           <h2 className="text-sm font-semibold text-muted-foreground">
             Preguntas frecuentes
           </h2>
-          <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+          <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card glass-card">
             {FAQ.map(({ q, a }) => (
               <details key={q} className="group p-4">
                 <summary className="cursor-pointer list-none text-sm font-medium marker:content-none">

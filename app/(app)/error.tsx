@@ -31,7 +31,7 @@ export default function AppError({
 
   return (
     <div className="flex flex-col items-center justify-center px-6 py-24 text-center">
-      <span className="mb-5 flex size-11 items-center justify-center rounded-xl border border-destructive/30 bg-card">
+      <span className="mb-5 flex size-11 items-center justify-center rounded-full border border-destructive/30 bg-accent">
         <TriangleAlert className="size-5 text-destructive" />
       </span>
 
@@ -42,7 +42,7 @@ export default function AppError({
       </p>
 
       {error.message ? (
-        <p className="mt-4 max-w-lg break-words rounded-lg border border-border bg-card px-3 py-2 text-left font-mono text-xs text-muted-foreground">
+        <p className="mt-4 max-w-lg break-words rounded-md border border-border bg-muted px-3 py-2 text-left font-mono text-xs text-muted-foreground">
           {error.message}
         </p>
       ) : null}

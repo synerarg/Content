@@ -32,7 +32,7 @@ export default function PreviewIndex() {
           <Link
             key={surface.href}
             href={surface.href}
-            className="rounded-xl border border-border bg-card p-5 transition-colors hover:border-[var(--synera-accent)]/40"
+            className="rounded-2xl border border-border bg-card glass-card p-5 transition-colors hover:border-[var(--synera-accent)]/40"
           >
             <h2 className="text-sm font-semibold">{surface.label}</h2>
             <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">

@@ -114,7 +114,7 @@ export function ImportFromSite({
   }
 
   return (
-    <section className="space-y-4 rounded-xl border border-border bg-card p-5">
+    <section className="space-y-4 rounded-2xl border border-border bg-card glass-card p-5">
       <div className="flex items-center gap-2">
         <Globe className="size-4 text-[var(--synera-accent)]" />
         <h2 className="text-sm font-semibold">Importar desde el sitio del cliente</h2>

@@ -48,7 +48,7 @@ export function PageHeaderSkeleton({
 /** Mirrors BrandCard: 48px logo tile, name + tagline, a row of palette dots. */
 export function BrandCardSkeleton() {
   return (
-    <div className="space-y-4 rounded-xl border border-border bg-card p-5">
+    <div className="space-y-4 rounded-2xl border border-border bg-card glass-card p-5">
       <Skeleton className="size-12 rounded-lg" />
       <div className="space-y-2">
         <Skeleton className="h-4 w-32" />
@@ -66,7 +66,7 @@ export function BrandCardSkeleton() {
 /** Mirrors a row in the batch list: title + meta on the left, chips right. */
 export function ListRowSkeleton() {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-card p-4">
+    <div className="flex items-center justify-between gap-4 rounded-2xl border border-border bg-card glass-card p-4">
       <div className="space-y-2">
         <Skeleton className="h-4 w-52" />
         <Skeleton className="h-4 w-80 max-w-full" />

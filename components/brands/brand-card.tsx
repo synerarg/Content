@@ -76,7 +76,7 @@ export function BrandCard({ brand }: { brand: BrandCardData }) {
   }
 
   return (
-    <div className="group relative rounded-xl border border-border bg-card p-5 transition-colors hover:border-[color-mix(in_oklch,var(--synera-accent)_30%,transparent)]">
+    <div className="group relative rounded-2xl border border-border bg-card glass-card p-5 transition-colors hover:border-[color-mix(in_oklch,var(--synera-accent)_30%,transparent)]">
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={(open) => {

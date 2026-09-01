@@ -51,7 +51,7 @@ export function UsageBreakdown({
           {emptyLabel}
         </p>
       ) : (
-        <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+        <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card glass-card">
           {rows.map((row) => (
             <div
               key={row.key}

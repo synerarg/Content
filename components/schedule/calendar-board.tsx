@@ -72,7 +72,7 @@ function PieceChip({
     <Link
       href={`/contenido/${piece.batchId}`}
       title={`${piece.brandName} · ${TYPE_LABEL[piece.type] ?? piece.type} · ${piece.batchTitle}`}
-      className="group block rounded-md border border-border bg-card/60 px-1.5 py-1 transition-colors hover:border-[color-mix(in_oklch,var(--synera-accent)_40%,transparent)] hover:bg-accent/30"
+      className="group block rounded-md border border-border bg-muted px-1.5 py-1 transition-colors hover:border-[color-mix(in_oklch,var(--synera-accent)_40%,transparent)] hover:bg-accent"
     >
       <span className="flex items-center gap-1.5">
         {/* A 3px marker, never a filled block: the palette is the client's, and
@@ -292,7 +292,7 @@ export function CalendarBoard({
 
       {/* --------------------------------------------------------------- */}
       <div className="overflow-hidden rounded-xl border border-border">
-        <div className="grid grid-cols-7 border-b border-border bg-card/40">
+        <div className="grid grid-cols-7 border-b border-border bg-muted">
           {WEEKDAY_LABELS.map((label) => (
             <div
               key={label}
@@ -314,7 +314,7 @@ export function CalendarBoard({
                 key={cell.day}
                 className={cn(
                   "min-h-24 space-y-1 border-b border-r border-border p-1.5 last:border-r-0",
-                  !cell.inMonth && "bg-card/20",
+                  !cell.inMonth && "bg-muted/50",
                 )}
               >
                 <div className="flex items-center justify-between">
@@ -356,7 +356,7 @@ export function CalendarBoard({
           </p>
         ) : (
           <>
-            <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+            <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card glass-card">
               {visiblePending.map((piece) => (
                 <PendingRow
                   key={piece.id}

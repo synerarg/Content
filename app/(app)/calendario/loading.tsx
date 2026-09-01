@@ -22,7 +22,7 @@ export default function CalendarioLoading() {
         </div>
 
         <div className="overflow-hidden rounded-xl border border-border">
-          <div className="grid grid-cols-7 border-b border-border bg-card/40">
+          <div className="grid grid-cols-7 border-b border-border bg-muted">
             {Array.from({ length: 7 }, (_, i) => (
               <div key={i} className="flex justify-center px-2 py-2">
                 <Skeleton className="h-3 w-8" />
@@ -46,7 +46,7 @@ export default function CalendarioLoading() {
 
         <div className="space-y-3">
           <Skeleton className="h-4 w-40" />
-          <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+          <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card glass-card">
             {Array.from({ length: 3 }, (_, i) => (
               <div key={i} className="flex flex-wrap items-center gap-2 p-3">
                 <Skeleton className="h-6 w-[3px] rounded-full" />

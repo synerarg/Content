@@ -71,26 +71,71 @@ export function SlideCanvas({
   );
 }
 
-/** The same canvas, scaled down to fit a container. Preview only. */
+/**
+ * The same canvas, scaled down to fit a container. Preview only.
+ *
+ * Three layers, and the two extra ones are not decoration.
+ *
+ * WHY. This is a colour-critical viewing surface: it shows a CLIENT's palette,
+ * and the studio's own canvas is #05060f. A brand whose background is dark —
+ * the Taller Peralta fixture is #0b0d10 — renders a placa that dissolves into
+ * the chrome, with no edge to say where the deliverable stops and the app
+ * begins. Image editors surround a canvas with flat neutral grey for exactly
+ * this reason, and `.placa-lightbox` is that field.
+ *
+ * WHY THREE LAYERS rather than a class on one box. The scaled canvas fills its
+ * container edge to edge, so an inset hairline on that container is painted
+ * over by the placa itself and never seen. So: the neutral field sits BELOW
+ * (it also backs a transparent or still-loading placa), the clipped canvas in
+ * the middle, and the hairline rides ABOVE as its own overlay. A plain border
+ * would work too, but it grows the box by 2px, and every caller sizes this
+ * from `maxWidth` — the preview must be exactly as wide as it says it is.
+ */
 export function SlidePreview({
   maxWidth,
   ...props
 }: SlideCanvasProps & { maxWidth: number }) {
   const spec = FORMATS[props.format];
   const scale = maxWidth / spec.width;
+  const height = spec.height * scale;
+  const radius = 12;
 
   return (
-    <div
-      style={{
-        width: maxWidth,
-        height: spec.height * scale,
-        overflow: "hidden",
-        borderRadius: 12,
-      }}
-    >
-      <div style={{ transform: `scale(${scale})`, transformOrigin: "top left" }}>
-        <SlideCanvas {...props} />
+    <div style={{ position: "relative", width: maxWidth, height }}>
+      <div
+        aria-hidden
+        className="placa-lightbox"
+        style={{ position: "absolute", inset: 0, borderRadius: radius }}
+      />
+
+      <div
+        style={{
+          position: "relative",
+          width: "100%",
+          height: "100%",
+          overflow: "hidden",
+          borderRadius: radius,
+        }}
+      >
+        <div
+          style={{ transform: `scale(${scale})`, transformOrigin: "top left" }}
+        >
+          <SlideCanvas {...props} />
+        </div>
       </div>
+
+      {/* The edge. Above the placa, and never interactive — several callers
+          wrap this whole preview in a button or a link. */}
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          inset: 0,
+          borderRadius: radius,
+          boxShadow: "inset 0 0 0 1px rgba(255, 255, 255, 0.09)",
+          pointerEvents: "none",
+        }}
+      />
     </div>
   );
 }

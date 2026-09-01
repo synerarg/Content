@@ -1120,7 +1120,7 @@ export function BatchDetail({
       {posts.map((post, postIndex) => (
         <section
           key={post.id}
-          className="space-y-4 rounded-xl border border-border bg-card p-5"
+          className="space-y-4 rounded-2xl border border-border bg-card glass-card p-5"
         >
           <div className="flex flex-wrap items-center gap-3">
             <span className="rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground">
@@ -1211,7 +1211,7 @@ export function BatchDetail({
                       <>
                         <div
                           key={backgrounds[slide.id] ? "bg" : "empty"}
-                          className="animate-in fade-in-0 duration-500 rounded-xl border border-border p-2"
+                          className="placa-lightbox animate-in fade-in-0 duration-500 rounded-2xl p-2"
                         >
                           <SlidePreview
                             maxWidth={296}

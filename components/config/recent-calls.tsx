@@ -25,7 +25,7 @@ export function RecentCalls({ calls }: { calls: RecentCall[] }) {
   }
 
   return (
-    <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+    <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card glass-card">
       {calls.map((call) => {
         const Icon = call.kind === "image" ? ImageIcon : Type;
 

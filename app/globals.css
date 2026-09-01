@@ -8,11 +8,61 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
 
-  --font-sans: var(--font-poppins);
-  --font-heading: var(--font-poppins);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-ui);
+  --font-heading: var(--font-display);
+  --font-mono: var(--font-eyebrow);
 
   --color-synera-accent: var(--synera-accent);
+
+  /* AuthKit named palette — available as bg-*, text-* and border-* utilities. */
+  --color-midnight-canvas: #05060f;
+  --color-steel-plate: #2f343e;
+  --color-fog-veil: #9da7ba;
+  --color-moon-mist: #c7d3ea;
+  --color-frost-glow: #d1e4fa;
+  --color-ice-highlight: #d8ecf8;
+  --color-pure-white: #ffffff;
+  --color-void-violet: #663af3;
+  --color-blueprint-blue: #b6d9fc;
+  --color-gridline-blue: #3f4959;
+  --color-glass-edge: #bad7f71f;
+  --color-luminous-fill: #c7d3ea1f;
+
+  /* Type scale */
+  --text-caption: 12px;
+  --text-caption--line-height: 1.33;
+  --text-body-sm: 14px;
+  --text-body-sm--line-height: 1.43;
+  --text-body: 16px;
+  --text-body--line-height: 1.5;
+  --text-body--letter-spacing: -0.16px;
+  --text-subheading: 18px;
+  --text-subheading--line-height: 1.33;
+  --text-heading-sm: 24px;
+  --text-heading-sm--line-height: 1.17;
+  --text-heading-sm--letter-spacing: -0.24px;
+  --text-heading: 28px;
+  --text-heading--line-height: 1.14;
+  --text-heading-lg: 44px;
+  --text-heading-lg--line-height: 1.16;
+  --text-display: 48px;
+  --text-display--line-height: 1.17;
+
+  /*
+    Radius families, explicit rather than derived.
+
+    The scaffold computed every step from a single --radius. The reference does
+    not work that way: it assigns a radius per COMPONENT TYPE (cards and modals
+    16, inputs and badges 6, buttons 999) and forbids mixing families within a
+    type. A calc chain cannot express that, so the steps are written out.
+  */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --radius-3xl: 24px;
+  --radius-4xl: 44px;
 
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -43,84 +93,123 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
 /*
   Synera Content Studio — app chrome design language.
 
-  Dark, airy, Linear/Attio-inspired. Surfaces are near-black with a cool blue
-  cast rather than pure neutral grey; separation comes from hairlines and
-  elevation, not from heavy fills.
-
-  Cyan #84E9FF is an ACCENT ONLY: hairlines, focus rings, glows, active nav
-  indicators, and the single primary CTA. It is never used as a large fill.
-  --primary is the one sanctioned exception, and it exists so there is exactly
-  one visually loud button per screen.
+  Frosted glass at midnight, per the AuthKit style reference. A near-black
+  canvas, surfaces that read as glass plates lit from behind, hairlines instead
+  of borders, and Void Violet as the single chromatic action colour.
 
   These tokens style the APP. They are deliberately separate from brand tokens,
   which are per-client, live in the database, and are injected into template
-  components as their own CSS custom properties at render time.
+  components as their own CSS custom properties at render time. Nothing in
+  templates/ references a token in this file, and nothing there ever should:
+  the placa carries the CLIENT's identity, never the studio's.
+
+  ---------------------------------------------------------------------------
+  DELIBERATE DEVIATIONS from the reference, and why. Each is a place where the
+  reference describes a marketing site and this is a production tool.
+
+  1. VIOLET IS THE PRIMARY ACTION, not only an auth submit. The reference
+     reserves #663af3 for the Continue button of a login form, because that is
+     the only action its page has. An app has one loud action per screen —
+     Generar, Guardar placas, Descargar ZIP. Violet marks exactly that one and
+     stays banned as decoration, which preserves the rule's intent.
+
+  2. THE LIT EDGE IS BLUEPRINT BLUE, not violet. The active-nav indicator and
+     the focus glow are decorative accents; making them violet would break (1)
+     by putting the action colour on things that are not actions.
+
+  3. FOCUS RINGS DO NOT USE THE 0.12 HAIRLINE. The reference lifts a border
+     from 0.12 to 0.24 alpha on focus, which is faint enough to fail a keyboard
+     user. Focus gets Blueprint Blue at full strength. This app ships a live
+     WCAG contrast checker for client palettes; its own chrome cannot fail what
+     it polices.
+
+  4. CATHEDRAL RHYTHM IS NOT ADOPTED IN APP SCREENS. The reference asks for
+     120px section gaps and 44-48px headings, explicitly against "dense SaaS".
+     The batch screen is dense by necessity — three pieces, five placas, queue
+     state and per-slot editors on one page. Those tokens exist below for the
+     LANDING; app screens keep working density.
+  ---------------------------------------------------------------------------
 */
 :root,
 .dark {
-  --radius: 0.625rem;
-
   /* UI motion: ease-out for anything entering/responding, ease-in-out for
      on-screen movement. Never ease-in — it delays the frame the user is
      watching most closely. */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
 
-  /* Surfaces */
-  --background: oklch(0.16 0.008 255);
-  --foreground: oklch(0.96 0.004 250);
-  --card: oklch(0.195 0.009 255);
-  --card-foreground: oklch(0.96 0.004 250);
-  --popover: oklch(0.205 0.009 255);
-  --popover-foreground: oklch(0.96 0.004 250);
+  /* Surfaces — the canvas, then glass above it */
+  --background: #05060f;
+  --foreground: #d1e4fa;
+  /* Barely-visible frost tint. Translucent on purpose: it reads as glass over
+     the canvas, and that is where the depth comes from. */
+  --card: rgba(186, 214, 247, 0.03);
+  --card-foreground: #d1e4fa;
+  /* Popovers and dialogs float over content, so they must be near-opaque or
+     the text behind them shows through. */
+  --popover: rgba(5, 6, 15, 0.97);
+  --popover-foreground: #d1e4fa;
 
-  /* The one sanctioned cyan fill */
-  --primary: #84e9ff;
-  --primary-foreground: oklch(0.17 0.01 255);
+  /* The single chromatic action — see deviation (1) */
+  --primary: #663af3;
+  --primary-foreground: #ffffff;
 
-  --secondary: oklch(0.245 0.008 255);
-  --secondary-foreground: oklch(0.96 0.004 250);
-  --muted: oklch(0.245 0.008 255);
-  --muted-foreground: oklch(0.7 0.012 250);
-  --accent: oklch(0.265 0.009 255);
-  --accent-foreground: oklch(0.96 0.004 250);
+  --secondary: #2f343e;
+  --secondary-foreground: #d1e4fa;
+  --muted: rgba(199, 211, 234, 0.06);
+  --muted-foreground: #9da7ba;
+  /* Hover wash on ghost surfaces. Never above 0.12 — past that the reference's
+     contrast floor for white text collapses. */
+  --accent: rgba(186, 214, 247, 0.06);
+  --accent-foreground: #ffffff;
   --destructive: oklch(0.62 0.21 25);
-  --destructive-foreground: oklch(0.98 0 0);
+  --destructive-foreground: #ffffff;
 
-  /* Hairlines — the primary separation device */
-  --border: oklch(1 0 0 / 8%);
-  --input: oklch(1 0 0 / 12%);
-  --ring: #84e9ff;
+  /* Hairlines — the system's border language. Never a solid stroke. */
+  --border: rgba(186, 215, 247, 0.12);
+  --input: rgba(186, 215, 247, 0.12);
+  --ring: #b6d9fc;
 
-  /* Raw accent, for glows and line work */
-  --synera-accent: #84e9ff;
+  /* Decorative accent, for glows and line work — see deviations (2) and (3) */
+  --synera-accent: #b6d9fc;
 
-  --chart-1: #84e9ff;
-  --chart-2: oklch(0.72 0.11 220);
-  --chart-3: oklch(0.62 0.09 235);
-  --chart-4: oklch(0.52 0.07 250);
-  --chart-5: oklch(0.42 0.05 260);
+  --chart-1: #663af3;
+  --chart-2: #b6d9fc;
+  --chart-3: #027dea;
+  --chart-4: #269684;
+  --chart-5: #e46d4c;
 
-  --sidebar: oklch(0.175 0.008 255);
-  --sidebar-foreground: oklch(0.96 0.004 250);
-  --sidebar-primary: #84e9ff;
-  --sidebar-primary-foreground: oklch(0.17 0.01 255);
-  --sidebar-accent: oklch(0.245 0.008 255);
-  --sidebar-accent-foreground: oklch(0.96 0.004 250);
-  --sidebar-border: oklch(1 0 0 / 8%);
-  --sidebar-ring: #84e9ff;
+  --sidebar: rgba(186, 214, 247, 0.02);
+  --sidebar-foreground: #d1e4fa;
+  --sidebar-primary: #663af3;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: rgba(186, 214, 247, 0.06);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgba(186, 215, 247, 0.12);
+  --sidebar-ring: #b6d9fc;
+
+  /* Elevation, built from inset frost and a soft halo rather than drop
+     shadows — the reference's elevation language. */
+  --elevation-card:
+    inset 0 1px 1px rgba(199, 211, 234, 0.12),
+    inset 0 24px 48px rgba(199, 211, 234, 0.05),
+    0 24px 32px rgba(6, 6, 14, 0.7);
+  --elevation-modal:
+    inset 0 1px 1px rgba(216, 236, 248, 0.2),
+    inset 0 24px 48px rgba(168, 216, 245, 0.06),
+    0 16px 32px rgba(0, 0, 0, 0.3);
+  --elevation-hairline: inset 0 0 0 1px rgba(186, 215, 247, 0.12);
+
+  /* Landing rhythm. Deliberately unused by app screens — deviation (4). */
+  --page-max-width: 1200px;
+  --section-gap: 120px;
+  --card-padding: 24px;
+  --element-gap: 16px;
 }
 
 @layer base {
@@ -138,14 +227,21 @@
     @apply font-sans;
   }
 
-  /* Airy by default: generous tracking on headings, tight on nothing. */
+  /*
+    No tracking here any more.
+
+    The type scale carries its own letter-spacing per step (-0.24px at
+    heading-sm, -0.16px at body), which is what the reference specifies. A
+    blanket `tracking-tight` is -0.025em — roughly -0.6px at 24px — so it beat
+    every token it was meant to support.
+  */
   h1,
   h2,
   h3 {
-    @apply font-heading tracking-tight;
+    @apply font-heading;
   }
 
-  /* Cyan as light again: a tint, not a highlighter. */
+  /* The accent as light again: a tint, not a highlighter. */
   ::selection {
     background: color-mix(in oklch, var(--synera-accent) 26%, transparent);
     color: var(--foreground);
@@ -157,7 +253,8 @@
     The base layer only sets outline-COLOR, which leaves the ring itself up to
     each component — and a plain <a>, which several nav and card surfaces are,
     gets none. Focus is the one place the accent is required rather than
-    optional, so it is declared once here instead of per component.
+    optional, so it is declared once here instead of per component. See
+    deviation (3): full-strength Blueprint Blue, not a 0.24 hairline.
   */
   :focus-visible {
     outline: 2px solid var(--synera-accent);
@@ -187,7 +284,7 @@
 }
 
 @layer utilities {
-  /* Cyan as light, not as paint. Use for focus states and active affordances. */
+  /* The accent as light, not as paint. Focus states and active affordances. */
   .synera-glow {
     box-shadow:
       0 0 0 1px color-mix(in oklch, var(--synera-accent) 28%, transparent),
@@ -196,6 +293,63 @@
 
   /* A single hairline that reads on dark surfaces without becoming a box. */
   .synera-hairline {
-    border-color: color-mix(in oklch, var(--synera-accent) 18%, transparent);
+    border-color: var(--border);
+  }
+
+  /*
+    The blueprint grid — ambient atmosphere behind the whole shell.
+
+    The reference's conic spotlight halo is deliberately NOT here. That device
+    anchors a full-bleed hero, and an app screen has no hero: dropping a
+    spotlight behind a working surface would light one region of a form for no
+    reason. The grid carries the atmosphere on its own; the halo belongs to the
+    landing.
+
+    Masked so the lines fade before the viewport edges, which stops the grid
+    from reading as a table.
+  */
+  .blueprint-grid {
+    background-image:
+      linear-gradient(to right, rgba(186, 215, 247, 0.06) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(186, 215, 247, 0.06) 1px, transparent 1px);
+    background-size: 88px 88px;
+    -webkit-mask-image: radial-gradient(
+      ellipse 90% 70% at 50% 0%,
+      #000 40%,
+      transparent 100%
+    );
+    mask-image: radial-gradient(
+      ellipse 90% 70% at 50% 0%,
+      #000 40%,
+      transparent 100%
+    );
+  }
+
+  /* A glass plate lit from behind — the default card treatment. */
+  .glass-card {
+    box-shadow: var(--elevation-card);
+  }
+
+  .glass-modal {
+    box-shadow: var(--elevation-modal);
+  }
+
+  /*
+    The placa lightbox — the one surface that OPTS OUT of the aesthetic.
+
+    Everything else here is frosted, tinted and lit. A placa preview cannot be:
+    it shows a CLIENT's palette, and the studio canvas is #05060f, within a few
+    points of a dark brand's own background (the Taller Peralta fixture is
+    #0b0d10). On the frosted canvas a dark placa dissolves into the chrome and
+    its colours cannot be judged — the same reason image editors surround a
+    canvas with flat neutral grey.
+
+    So: a flat neutral field, a defined edge, and no glow whatsoever. This is a
+    colour-critical viewing surface, not a decorative one.
+  */
+  .placa-lightbox {
+    background-color: #17181c;
+    background-image: none;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.09);
   }
 }

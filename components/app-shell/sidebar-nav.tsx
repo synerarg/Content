@@ -63,9 +63,16 @@ export function SidebarNav({
               isHorizontal
                 ? "shrink-0 gap-2 px-3 py-2.5"
                 : "px-3 py-2",
+              /*
+                Full --accent, not a fraction of it.
+
+                --accent is now a 6% frost wash rather than an opaque fill, so
+                the old `/60` and `/30` composed down to 3.6% and 1.8% — below
+                the point where either state was visible at all.
+              */
               isActive
-                ? "bg-accent/60 text-foreground"
-                : "text-muted-foreground hover:bg-accent/30 hover:text-foreground",
+                ? "bg-accent text-pure-white"
+                : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
             )}
           >
             {/* Active state reads as a lit edge, never a filled block. */}

@@ -151,7 +151,7 @@ export function HistoryPanel({
   return (
     <div className="space-y-8 px-6 py-8 md:px-8">
       {/* ---------------------------------------------------------------- */}
-      <section className="space-y-4 rounded-xl border border-border bg-card p-5">
+      <section className="space-y-4 rounded-2xl border border-border bg-card glass-card p-5">
         <div className="flex items-center gap-2">
           <Upload className="size-4 text-[var(--synera-accent)]" />
           <h2 className="text-sm font-semibold">Importar contenido publicado</h2>
@@ -254,7 +254,7 @@ export function HistoryPanel({
 
         {analysis && analysis.angles.length > 0 ? (
           <div className="space-y-4">
-            <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+            <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card glass-card">
               {analysis.angles.map((angle) => (
                 <div key={angle.slug} className="space-y-1 p-4">
                   <p className="font-mono text-xs text-[var(--synera-accent)]">
@@ -306,7 +306,7 @@ export function HistoryPanel({
             Todavía no hay nada cargado.
           </p>
         ) : (
-          <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+          <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card glass-card">
             {posts.map((post) => (
               <div key={post.id} className="flex items-start gap-3 p-4">
                 <div className="min-w-0 flex-1">

@@ -247,7 +247,7 @@ function AddProduct({ brandId }: { brandId: string }) {
   }
 
   return (
-    <section className="space-y-4 rounded-xl border border-border bg-card p-5">
+    <section className="space-y-4 rounded-2xl border border-border bg-card glass-card p-5">
       <div className="flex items-center gap-2">
         <Package className="size-4 text-[var(--synera-accent)]" />
         <h2 className="text-sm font-semibold">Agregar producto</h2>
@@ -477,7 +477,7 @@ export function ProductPanel({
             la foto real del producto en vez de una imagen inventada.
           </p>
         ) : (
-          <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+          <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card glass-card">
             {products.map((product) => (
               <ProductRow key={product.id} brandId={brandId} product={product} />
             ))}

@@ -54,7 +54,7 @@ export function TemplatePicker({
             className={cn(
               "group space-y-2 rounded-xl border p-2 text-left transition-colors",
               selected
-                ? "border-[color-mix(in_oklch,var(--synera-accent)_45%,transparent)] bg-accent/40"
+                ? "border-[color-mix(in_oklch,var(--synera-accent)_45%,transparent)] bg-accent"
                 : "border-border hover:border-[color-mix(in_oklch,var(--synera-accent)_25%,transparent)]",
             )}
           >
@@ -63,7 +63,7 @@ export function TemplatePicker({
               a click landing on the inner canvas instead of the button would
               silently do nothing.
             */}
-            <div className="pointer-events-none overflow-hidden rounded-lg">
+            <div className="pointer-events-none overflow-hidden rounded-xl">
               <SlidePreview
                 maxWidth={160}
                 template={template}

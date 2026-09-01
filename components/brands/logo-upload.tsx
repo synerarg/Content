@@ -45,7 +45,14 @@ export function LogoUpload({
 
   return (
     <div className="flex items-center gap-4">
-      <div className="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-card">
+      {/*
+        The lightbox, not a card — same reasoning as the placa preview.
+
+        This box holds the CLIENT's logo. On a frosted, blue-tinted surface a
+        logo's own colours cannot be read honestly, and a white mark on 3% frost
+        loses its edge entirely. Flat neutral field, defined edge, no glow.
+      */}
+      <div className="placa-lightbox flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-md">
         {previewUrl ? (
           // Deliberately a plain <img>: next/image would proxy this through the
           // optimizer, and brand assets are already sized and served from our

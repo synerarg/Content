@@ -6,7 +6,7 @@ export default function ProductosLoading() {
     <>
       <PageHeaderSkeleton withAction />
       <div className="space-y-8 px-6 py-8 md:px-8">
-        <div className="space-y-4 rounded-xl border border-border bg-card p-5">
+        <div className="space-y-4 rounded-2xl border border-border bg-card glass-card p-5">
           <Skeleton className="h-4 w-44" />
           <div className="flex items-start gap-4">
             <Skeleton className="size-24 rounded-lg" />

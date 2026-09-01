@@ -25,10 +25,10 @@ export default function GlobalError({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "#0b0e12",
-          color: "#f2f4f7",
+          background: "#05060f",
+          color: "#d1e4fa",
           fontFamily:
-            "Poppins, ui-sans-serif, system-ui, -apple-system, sans-serif",
+            "ui-sans-serif, system-ui, -apple-system, sans-serif",
           textAlign: "center",
           padding: "2rem",
         }}
@@ -40,8 +40,8 @@ export default function GlobalError({
               width: 8,
               height: 8,
               borderRadius: 999,
-              background: "#84e9ff",
-              boxShadow: "0 0 10px #84e9ff",
+              background: "#b6d9fc",
+              boxShadow: "0 0 10px #b6d9fc",
               margin: "0 auto 1.5rem",
             }}
           />
@@ -52,7 +52,7 @@ export default function GlobalError({
             style={{
               marginTop: "0.5rem",
               fontSize: "0.875rem",
-              color: "#98a2b3",
+              color: "#9da7ba",
             }}
           >
             Falló algo en la raíz de la aplicación. Recargar suele alcanzar.
@@ -64,7 +64,7 @@ export default function GlobalError({
                 marginTop: "1rem",
                 fontFamily: "ui-monospace, monospace",
                 fontSize: "0.6875rem",
-                color: "#98a2b3",
+                color: "#9da7ba",
               }}
             >
               digest {error.digest}
@@ -79,7 +79,7 @@ export default function GlobalError({
               borderRadius: "0.5rem",
               border: "1px solid rgba(132,233,255,0.28)",
               background: "transparent",
-              color: "#84e9ff",
+              color: "#b6d9fc",
               fontSize: "0.875rem",
               fontFamily: "inherit",
               cursor: "pointer",
