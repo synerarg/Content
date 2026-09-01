@@ -27,43 +27,43 @@ Not a git repo beyond the create-next-app initial commit.
 
 ## 2. Environment and credentials — current state
 
-> ## ⚠️ 2026-09-01 — THE SUPABASE PROJECT NO LONGER EXISTS
+> ## ⚠️ 2026-09-01 — THE SUPABASE PROJECT IS PAUSED. RESTORE IT BEFORE ANYTHING.
 >
-> **Everything in this section about `dzxkxwuzfmoyktevfdfn` is dead.** Do not
-> spend time on it; the table below is kept only so the shape of the config is
-> still documented.
+> Nothing is lost. Restoring the project from the Supabase dashboard brings the
+> data back, and the ref, URL and keys do not change — so the config in the
+> table below stays valid. **Do not create a new project, and do not re-run the
+> migrations against a fresh one.**
 >
-> Evidence, in the order it was gathered:
-> - `dzxkxwuzfmoyktevfdfn.supabase.co` returns **NXDOMAIN** against 8.8.8.8,
->   while `supabase.com` resolves from the same machine. Not a DNS or network
->   problem.
-> - A pause does not remove the domain, and an **org transfer preserves the ref,
->   the URL and the keys** — so neither explains this. Only deletion does.
-> - The Supabase MCP connector now reaches exactly one org, `synera`
->   (`gmjzxrqlvlbpapvikiji`), holding five unrelated client projects. None was
->   created near 2026-08-05, which is when this project's migrations begin, so
->   it is not among them under another name. Confirmed against the dashboard by
->   the account owner: it is not in the personal account either.
+> ### A paused project stops resolving in DNS — do not read that as deleted
 >
-> **What survives:** the whole schema. The 17 migrations in
-> `supabase/migrations` rebuild the tables, the RLS policies, the three buckets
-> (`brand-assets`, `generated`, `renders`), the usage view and the RPCs.
+> This cost most of a session. While paused,
+> `dzxkxwuzfmoyktevfdfn.supabase.co` returns **NXDOMAIN** against 8.8.8.8, even
+> though `supabase.com` resolves from the same machine, and the project does
+> **not** appear in the MCP connector's `list_projects` either. Both signals
+> look exactly like deletion.
 >
-> **What is gone:** all data. Brands with their palettes, fonts, voice and art
-> direction; products; published history; batches, posts and slides; the
-> `generations` audit log; and every object in Storage — uploaded logos, brand
-> `.woff2` files, generated backgrounds and saved PNG renders.
+> They are not. The reasoning that a pause leaves the domain up was wrong, and
+> was written into this file before the account owner identified the real cause.
+> If this project ever looks deleted again, **check the dashboard for a paused
+> state first** — that is the cheap check, and it is the likely answer.
 >
-> **Recovery**, when someone decides where the new project lives: create it,
-> `npm run db:link`, `npm run db:push`, `npm run db:types`, then redo Google
-> OAuth per §4 of `DEPLOY.md` — including `http://localhost:3000/**` on the
-> redirect allow-list, without which local sign-in bounces. Note that a new
-> project in the `synera` org costs **USD 10/month** (that org is on a paid
+> ### If it really were gone
+>
+> The schema is fully reproducible: the 17 migrations in `supabase/migrations`
+> rebuild the tables, the RLS policies, the three buckets (`brand-assets`,
+> `generated`, `renders`), the usage view and the RPCs. The DATA would not be —
+> brands, products, published history, batches, the `generations` log, and every
+> object in Storage. Recreating would mean a new project, `npm run db:link`,
+> `db:push`, `db:types`, and redoing Google OAuth per §4 of `DEPLOY.md`. Note a
+> new project in the `synera` org costs **USD 10/month** (that org is on a paid
 > plan); a personal-account project on the free tier does not.
 >
-> **The Vercel deployment points at the dead project too**, so
-> `content-nine-neon.vercel.app` is down until its env vars carry the new
-> values.
+> ### While it is paused
+>
+> Local sign-in fails with a fetch error, and the Vercel deployment at
+> `content-nine-neon.vercel.app` is down for the same reason. `/preview` is
+> unaffected — it renders fixture data and never contacts Supabase, so design
+> work does not need the database at all.
 
 `.env.local` exists and is gitignored (`.env*`). Masked status as of handoff:
 
